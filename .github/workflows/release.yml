@@ -33,13 +33,10 @@ jobs:
       run: |
         make build
 
-    - name: Create Release and Upload Asset
-      uses: softprops/action-gh-release@v1
+    - name: Upload x86-64 binary
+      uses: svenstaro/upload-release-action@v2
       with:
-        tag_name: ${{ github.ref_name }}
-        name: ${{ github.ref_name }}
-        generate_release_notes: true
-        files: |
-          dist/pwrctl
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        repo_token: ${{ secrets.GITHUB_TOKEN }}
+        file: dist/pwrctl
+        asset_name: pwrctl-${{ github.ref_name }}
+        tag: ${{ github.ref }}
