@@ -26,6 +26,9 @@ install: build
 	mkdir -p $(DESTDIR)/bin
 	cmake --install $(BUILD_DIR) --prefix $(DESTDIR)
 
+uninstall:
+	rm -rf $(DESTDIR)/bin/$(EXEC_NAME)
+
 # Clean build artifacts
 clean:
 	rm -rf $(BUILD_DIR) $(DIST_DIR)
