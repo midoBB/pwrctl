@@ -7,7 +7,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets DBus)
 
 qt_add_executable(pwrctl
     main.hpp main.cpp
@@ -26,6 +26,7 @@ target_link_libraries(pwrctl PRIVATE
     Qt6::Core
     Qt6::Gui
     Qt6::Widgets
+    Qt6::DBus
 )
 
 install(TARGETS pwrctl DESTINATION bin)

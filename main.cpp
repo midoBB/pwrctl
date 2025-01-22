@@ -1,4 +1,5 @@
 #include "main.hpp"
+#include <iostream>
 
 Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
   setQuitOnLastWindowClosed(false);
@@ -115,29 +116,96 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
   trayIcon->show();
   connect(saveBtn, &QPushButton::clicked, this, &Application::handleSave);
   connect(cancelBtn, &QPushButton::clicked, this, &Application::handleCancel);
+  setupPowerMonitoring();
+  connect(this, &Application::powerSourceChanged, [this](bool onBattery) {
+    qDebug() << "Power source changed to" << (onBattery ? "Battery" : "AC");
+    // Example: Highlight active column
+    QFont font;
+    font.setBold(true);
+
+    displayPlugged->setFont(onBattery ? QFont() : font);
+    displayBattery->setFont(onBattery ? font : QFont());
+
+    // Or show current state in window title
+    mainWindow->setWindowTitle(
+        QString("Power Settings - %1").arg(onBattery ? "Battery" : "AC Power"));
+  });
+}
+void Application::setupPowerMonitoring() {
+    QDBusConnection systemBus = QDBusConnection::systemBus();
+
+    // Connect to PropertiesChanged signal
+    bool connected = systemBus.connect(
+        "org.freedesktop.UPower",
+        "/org/freedesktop/UPower",
+        "org.freedesktop.DBus.Properties",
+        "PropertiesChanged",
+        this,
+        SLOT(handleDBusSignal(QDBusMessage))
+    );
+
+    if (!connected) {
+        qWarning() << "Failed to connect to D-Bus signal!";
+    }
+
+    // Get initial state
+    QDBusInterface upowerInterface(
+        "org.freedesktop.UPower",
+        "/org/freedesktop/UPower",
+        "org.freedesktop.UPower",
+        systemBus
+    );
+
+    if (upowerInterface.isValid()) {
+        m_onBattery = upowerInterface.property("OnBattery").toBool();
+        qDebug() << "Initial power state:" << (m_onBattery ? "Battery" : "AC");
+    } else {
+        qCritical() << "Failed to access UPower interface!";
+    }
 }
 
-void Application::handleCancel() {
-  mainWindow->hide();
+void Application::handleDBusSignal(QDBusMessage message) {
+    QList<QVariant> args = message.arguments();
+    if (args.count() < 3) return;
+
+    QString interfaceName = args[0].toString();
+    QVariantMap changedProps = args[1].value<QVariantMap>();
+    QStringList invalidatedProps = args[2].toStringList();
+
+    if (interfaceName == "org.freedesktop.UPower" && changedProps.contains("OnBattery")) {
+        bool newState = changedProps["OnBattery"].toBool();
+        if (newState != m_onBattery) {
+            m_onBattery = newState;
+
+            // Write to terminal with timestamp and state
+            QString logMessage = QString("[%1] Power source changed to: %2")
+                .arg(QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss"))
+                .arg(m_onBattery ? "Battery" : "AC Power");
+
+            qDebug().noquote() << logMessage;  // Formatted debug output
+            std::cout << logMessage.toStdString() << std::endl;  // Always print to terminal
+        }
+    }
 }
+void Application::handleCancel() { mainWindow->hide(); }
 void Application::handleSave() {
-    qDebug() << "Display Plugged Index:" << displayPlugged->currentIndex();
-    qDebug() << "Display Battery Index:" << displayBattery->currentIndex();
-    qDebug() << "Sleep Plugged Index:" << sleepPlugged->currentIndex();
-    qDebug() << "Sleep Battery Index:" << sleepBattery->currentIndex();
-    qDebug() << "Lid Close Plugged Index:" << lidClosePlugged->currentIndex();
-    qDebug() << "Lid Close Battery Index:" << lidCloseBattery->currentIndex();
+  qDebug() << "Display Plugged Index:" << displayPlugged->currentIndex();
+  qDebug() << "Display Battery Index:" << displayBattery->currentIndex();
+  qDebug() << "Sleep Plugged Index:" << sleepPlugged->currentIndex();
+  qDebug() << "Sleep Battery Index:" << sleepBattery->currentIndex();
+  qDebug() << "Lid Close Plugged Index:" << lidClosePlugged->currentIndex();
+  qDebug() << "Lid Close Battery Index:" << lidCloseBattery->currentIndex();
 
-    // Optional: Also show the text values
-    qDebug() << "Values:";
-    qDebug() << " - Plugged display:" << displayPlugged->currentText();
-    qDebug() << " - Battery display:" << displayBattery->currentText();
-    qDebug() << " - Plugged sleep:" << sleepPlugged->currentText();
-    qDebug() << " - Battery sleep:" << sleepBattery->currentText();
-    qDebug() << " - Lid action Plugged:" << lidClosePlugged->currentText();
-    qDebug() << " - Lid action Battery:" << lidCloseBattery->currentText();
+  // Optional: Also show the text values
+  qDebug() << "Values:";
+  qDebug() << " - Plugged display:" << displayPlugged->currentText();
+  qDebug() << " - Battery display:" << displayBattery->currentText();
+  qDebug() << " - Plugged sleep:" << sleepPlugged->currentText();
+  qDebug() << " - Battery sleep:" << sleepBattery->currentText();
+  qDebug() << " - Lid action Plugged:" << lidClosePlugged->currentText();
+  qDebug() << " - Lid action Battery:" << lidCloseBattery->currentText();
 
-    mainWindow->hide();
+  mainWindow->hide();
 }
 int main(int argc, char *argv[]) {
   Application app(argc, argv);
