@@ -9,10 +9,22 @@ Worker::Worker(QObject *parent) : QObject(parent) {
   onBattery = !readPowerSupplyStatus();
 }
 
+void Worker::initialize() {
+  // Run powerprofilesctl list
+  QProcess *process = new QProcess(this);
+  process->start("powerprofilesctl", QStringList() << "list");
+  process->waitForFinished();
+
+  QString output = process->readAllStandardOutput();
+  qDebug() << "powerprofilesctl list output:\n" << output;
+
+  parsePowerProfiles(output);
+}
+
 Worker::~Worker() {
-    timer->stop();
-    delete timer;
-    qDebug() << "Worker destroyed";
+  timer->stop();
+  delete timer;
+  qDebug() << "Worker destroyed";
 }
 
 bool Worker::readPowerSupplyStatus() {
@@ -28,6 +40,37 @@ bool Worker::readPowerSupplyStatus() {
                << POWER_SUPPLY_PATH;
     return false; // Assume plugged in if file can't be read
   }
+}
+QString capitalise_each_word(const QString& sentence)
+{
+  QStringList words = sentence.split(" ", Qt::SkipEmptyParts);
+  for (QString& word : words)
+    word.front() = word.front().toUpper();
+
+  return words.join(" ");
+}
+void Worker::parsePowerProfiles(const QString &output) {
+  QStringList profiles;
+  QString activeProfile;
+  QStringList lines = output.split("\n");
+  QRegularExpression profileRegex("^\\s*(\\*?\\s*\\w[\\w\\-]*):$");
+
+  for (const QString &line : lines) {
+    QRegularExpressionMatch match = profileRegex.match(line);
+    if (match.hasMatch()) {
+      QString profileName = match.captured(1).trimmed();
+      bool isActive = profileName.startsWith("*");
+      if (isActive) {
+        profileName = profileName.mid(1).trimmed();
+        activeProfile = capitalise_each_word(profileName);
+      }
+      profiles.append(capitalise_each_word(profileName));
+    }
+  }
+
+  qDebug() << "Available profiles:" << profiles;
+  qDebug() << "Active profile:" << activeProfile;
+  emit powerProfilesChanged(profiles, activeProfile);
 }
 
 void Worker::doWork() {
@@ -46,12 +89,13 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
   workerThread = new QThread(this);
   worker = new Worker();
   worker->moveToThread(workerThread);
-
-  connect(workerThread, &QThread::started, worker, [this]() {
-    worker->timer->start();
-  });
+  connect(workerThread, &QThread::started, worker, &Worker::initialize);
+  connect(workerThread, &QThread::started, worker,
+          [this]() { worker->timer->start(); });
   connect(worker, &Worker::onBatteryChanged, this,
           &Application::powerSourceChanged);
+  connect(worker, &Worker::powerProfilesChanged, this,
+          &Application::updatePowerProfiles);
   connect(workerThread, &QThread::finished, worker, &QObject::deleteLater);
   connect(workerThread, &QThread::finished, workerThread,
           &QObject::deleteLater);
@@ -65,6 +109,10 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
   this->sleepBattery = new QComboBox();
   this->lidClosePlugged = new QComboBox();
   this->lidCloseBattery = new QComboBox();
+  this->powerProfilePlugged = new QComboBox();
+  this->powerProfileBattery = new QComboBox();
+  powerProfilePlugged->setEnabled(false);
+  powerProfileBattery->setEnabled(false);
   mainWindow->setWindowTitle("Power Settings");
   QWidget *centralWidget = new QWidget();
   QGridLayout *mainLayout = new QGridLayout(centralWidget);
@@ -132,6 +180,11 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
   mainLayout->addWidget(lidClosePlugged, 3, 1);
   mainLayout->addWidget(lidCloseBattery, 3, 2);
 
+  // Power Profiles
+  mainLayout->addWidget(new QLabel("Power Profile:"), 4, 0);
+  mainLayout->addWidget(powerProfilePlugged, 4, 1);
+  mainLayout->addWidget(powerProfileBattery, 4, 2);
+
   // Buttons
   QPushButton *saveBtn = new QPushButton("Save changes");
   QPushButton *cancelBtn = new QPushButton("Cancel");
@@ -139,7 +192,7 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
   btnLayout->addStretch();
   btnLayout->addWidget(saveBtn);
   btnLayout->addWidget(cancelBtn);
-  mainLayout->addLayout(btnLayout, 4, 0, 1, 3);
+  mainLayout->addLayout(btnLayout, 5, 0, 1, 3);
 
   // Connections
   connect(cancelBtn, &QPushButton::clicked, mainWindow, &QMainWindow::hide);
@@ -148,7 +201,7 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
   centralWidget->setLayout(mainLayout);
   mainWindow->setCentralWidget(centralWidget);
   mainWindow->resize(400, 200);
-  mainWindow->hide();
+  // mainWindow->hide();
 
   // Create tray icon
   trayIcon = new QSystemTrayIcon(QIcon(":/icon.png"), this);
@@ -186,10 +239,37 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
 }
 
 Application::~Application() {
-    worker->timer->stop();
-    workerThread->quit();
-    workerThread->wait();
-    qDebug() << "Application destroyed";
+  worker->timer->stop();
+  workerThread->quit();
+  workerThread->wait();
+  qDebug() << "Application destroyed";
+}
+
+void Application::updatePowerProfiles(const QStringList &profiles,
+                                      const QString &activeProfile) {
+  this->powerProfiles = profiles;
+  this->activeProfile = activeProfile;
+
+  // Clear existing items
+  powerProfilePlugged->clear();
+  powerProfileBattery->clear();
+
+  // Add new profiles to the combo boxes
+  powerProfilePlugged->addItems(profiles);
+  powerProfileBattery->addItems(profiles);
+
+  // Set the active profile
+  int index = profiles.indexOf(activeProfile);
+  powerProfilePlugged->setCurrentIndex(index);
+  powerProfileBattery->setCurrentIndex(index);
+
+  // Enable the combo boxes
+  powerProfilePlugged->setEnabled(true);
+  powerProfileBattery->setEnabled(true);
+
+  qDebug() << "Power profiles updated in Application:";
+  qDebug() << "Available profiles:" << powerProfiles;
+  qDebug() << "Active profile:" << activeProfile;
 }
 
 void Application::handleCancel() { mainWindow->hide(); }
