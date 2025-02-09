@@ -1,13 +1,13 @@
 #include "main.hpp"
 #include "powerprofile.hpp"
-
-const QString POWER_SUPPLY_PATH = "/sys/class/power_supply/ADP1/online";
+#include "batterymanager.hpp"
 
 Worker::Worker(QObject *parent) : QObject(parent) {
   timer = new QTimer(this);
   connect(timer, &QTimer::timeout, this, &Worker::doWork);
   timer->setInterval(5000);
-  onBattery = !readPowerSupplyStatus();
+  BatteryManager batteryManager;
+  onBattery = !batteryManager.readPowerSupplyStatus();
 }
 
 void Worker::initialize() {
@@ -24,27 +24,13 @@ Worker::~Worker() {
   timer->stop();
 }
 
-bool Worker::readPowerSupplyStatus() {
-  QFile inputFile(POWER_SUPPLY_PATH);
-  if (inputFile.open(QIODevice::ReadOnly)) {
-    QTextStream in(&inputFile);
-    QString line = in.readLine();
-    inputFile.close();
-    bool isOnline = (line == "1");
-    return isOnline;
-  } else {
-    qWarning() << "Could not open power supply status file:"
-               << POWER_SUPPLY_PATH;
-    return false; // Assume plugged in if file can't be read
-  }
-}
-
 void Worker::applyPowerSettings() {
   qDebug() << "applyPowerSettings called, onBattery:" << onBattery;
 }
 
 void Worker::doWork() {
-  bool isOnline = readPowerSupplyStatus();
+  BatteryManager batteryManager;
+  bool isOnline = batteryManager.readPowerSupplyStatus();
   bool newOnBattery = !isOnline;
 
   if (newOnBattery != onBattery) {
