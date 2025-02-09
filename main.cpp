@@ -1,4 +1,5 @@
 #include "main.hpp"
+#include "powerprofile.hpp"
 
 const QString POWER_SUPPLY_PATH = "/sys/class/power_supply/ADP1/online";
 
@@ -10,21 +11,17 @@ Worker::Worker(QObject *parent) : QObject(parent) {
 }
 
 void Worker::initialize() {
-  // Run powerprofilesctl list
-  QProcess *process = new QProcess(this);
-  process->start("powerprofilesctl", QStringList() << "list");
-  process->waitForFinished();
+  PowerProfileManager profileManager;
+  QStringList profiles = profileManager.getPowerProfiles();
+  QString activeProfile = profileManager.getActivePowerProfile();
 
-  QString output = process->readAllStandardOutput();
-
-  parsePowerProfiles(output);
+  emit powerProfilesChanged(profiles, activeProfile);
   timer->start();
   emit workerFinished();
 }
 
 Worker::~Worker() {
   timer->stop();
-  delete timer;
 }
 
 bool Worker::readPowerSupplyStatus() {
@@ -40,34 +37,6 @@ bool Worker::readPowerSupplyStatus() {
                << POWER_SUPPLY_PATH;
     return false; // Assume plugged in if file can't be read
   }
-}
-QString capitalise_each_word(const QString &sentence) {
-  QStringList words = sentence.split(" ", Qt::SkipEmptyParts);
-  for (QString &word : words)
-    word.front() = word.front().toUpper();
-
-  return words.join(" ");
-}
-void Worker::parsePowerProfiles(const QString &output) {
-  QStringList profiles;
-  QString activeProfile;
-  QStringList lines = output.split("\n");
-  QRegularExpression profileRegex("^\\s*(\\*?\\s*\\w[\\w\\-]*):$");
-
-  for (const QString &line : lines) {
-    QRegularExpressionMatch match = profileRegex.match(line);
-    if (match.hasMatch()) {
-      QString profileName = match.captured(1).trimmed();
-      bool isActive = profileName.startsWith("*");
-      if (isActive) {
-        profileName = profileName.mid(1).trimmed();
-        activeProfile = capitalise_each_word(profileName.replace("-", " "));
-      }
-      profiles.append(capitalise_each_word(profileName.replace("-", " ")));
-    }
-  }
-
-  emit powerProfilesChanged(profiles, activeProfile);
 }
 
 void Worker::applyPowerSettings() {

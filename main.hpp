@@ -44,7 +44,6 @@ signals:
 
 private:
   bool readPowerSupplyStatus();
-  void parsePowerProfiles(const QString &output);
   bool onBattery = false;
 };
 
