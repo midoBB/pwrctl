@@ -1,4 +1,5 @@
 #pragma once
+#include "powerprofile.hpp"
 #include <QAction>
 #include <QApplication>
 #include <QComboBox>
@@ -38,8 +39,6 @@ public slots:
 
 signals:
   void onBatteryChanged(bool onBattery);
-  void powerProfilesChanged(const QStringList &profiles,
-                            const QString &activeProfile);
   void workerFinished();
 
 private:
@@ -56,10 +55,12 @@ public:
 signals:
   void powerSourceChanged(bool onBattery);
   void appLoaded();
+  void powerProfilesChanged(const QHash<QString, QString> &profiles,
+                            const QPair<QString, QString> &activeProfile);
 
 public slots:
-  void updatePowerProfiles(const QStringList &profiles,
-                           const QString &activeProfile);
+  void updatePowerProfiles(const QHash<QString, QString> &profiles,
+                           const QPair<QString, QString> &activeProfile);
   void onAppLoaded();
 
 private slots:
@@ -88,7 +89,5 @@ private:
   QThread *workerThread;
   Worker *worker;
   QStringList powerProfiles;
-  QString activeProfile;
-  QString m_savedPowerProfilePlugged;
-  QString m_savedPowerProfileBattery;
+  PowerProfileManager  profileManager;
 };

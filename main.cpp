@@ -1,6 +1,6 @@
 #include "main.hpp"
-#include "powerprofile.hpp"
 #include "batterymanager.hpp"
+#include "powerprofile.hpp"
 
 Worker::Worker(QObject *parent) : QObject(parent) {
   timer = new QTimer(this);
@@ -11,18 +11,11 @@ Worker::Worker(QObject *parent) : QObject(parent) {
 }
 
 void Worker::initialize() {
-  PowerProfileManager profileManager;
-  QStringList profiles = profileManager.getPowerProfiles();
-  QString activeProfile = profileManager.getActivePowerProfile();
-
-  emit powerProfilesChanged(profiles, activeProfile);
   timer->start();
   emit workerFinished();
 }
 
-Worker::~Worker() {
-  timer->stop();
-}
+Worker::~Worker() { timer->stop(); }
 
 void Worker::applyPowerSettings() {
   qDebug() << "applyPowerSettings called, onBattery:" << onBattery;
@@ -48,7 +41,8 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
   connect(workerThread, &QThread::started, worker, &Worker::initialize);
   connect(worker, &Worker::onBatteryChanged, this,
           &Application::powerSourceChanged);
-  connect(worker, &Worker::onBatteryChanged, worker, &Worker::applyPowerSettings);
+  connect(worker, &Worker::onBatteryChanged, worker,
+          &Worker::applyPowerSettings);
   connect(workerThread, &QThread::finished, worker, &QObject::deleteLater);
 
   workerThread->start();
@@ -212,9 +206,17 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
     mainWindow->setWindowTitle(
         QString("Power Settings - %1").arg(onBattery ? "Battery" : "AC Power"));
   });
-  loadSettings();
-  connect(worker, &Worker::powerProfilesChanged, this,
+  connect(this, &Application::powerProfilesChanged, this,
           &Application::updatePowerProfiles);
+
+  auto profiles = profileManager.getPowerProfiles();
+  auto activeProfile = profileManager.getActivePowerProfile();
+  qDebug() << "activeProfile: " << activeProfile;
+  qDebug() << "profiles: " << profiles;
+
+  emit powerProfilesChanged(profiles, activeProfile);
+
+  loadSettings();
   connect(worker, &Worker::workerFinished, [this]() {
     if (guiLoaded) {
       emit appLoaded();
@@ -241,37 +243,28 @@ QString Application::getSettingsPath() {
   return fileName;
 }
 
-void Application::updatePowerProfiles(const QStringList &profiles,
-                                      const QString &activeProfile) {
+void Application::updatePowerProfiles(
+    const QHash<QString, QString> &profiles,
+    const QPair<QString, QString> &activeProfile) {
+  qDebug() << "updatePowerProfiles";
   // Clear existing items
   powerProfilePlugged->clear();
   powerProfileBattery->clear();
 
   // Add new profiles to the combo boxes
-  powerProfilePlugged->addItems(profiles);
-  powerProfileBattery->addItems(profiles);
+  for (const auto &profile : profiles) {
+    powerProfilePlugged->addItem(profile);
+    powerProfileBattery->addItem(profile);
+  }
 
   // Set the active profile
-  int index = profiles.indexOf(activeProfile);
+  int index = powerProfilePlugged->findText(activeProfile.second);
   powerProfilePlugged->setCurrentIndex(index);
   powerProfileBattery->setCurrentIndex(index);
 
   // Enable the combo boxes
   powerProfilePlugged->setEnabled(true);
   powerProfileBattery->setEnabled(true);
-  if (!m_savedPowerProfilePlugged.isEmpty()) {
-    int idx = powerProfilePlugged->findText(m_savedPowerProfilePlugged);
-    if (idx != -1)
-      powerProfilePlugged->setCurrentIndex(idx);
-    m_savedPowerProfilePlugged.clear();
-  }
-
-  if (!m_savedPowerProfileBattery.isEmpty()) {
-    int idx = powerProfileBattery->findText(m_savedPowerProfileBattery);
-    if (idx != -1)
-      powerProfileBattery->setCurrentIndex(idx);
-    m_savedPowerProfileBattery.clear();
-  }
 }
 
 void Application::handleCancel() { mainWindow->hide(); }
@@ -286,8 +279,16 @@ void Application::handleSave() {
   settings.setValue("LidCloseBattery", lidCloseBattery->currentText());
   settings.setValue("PowerKeyPlugged", powerKeyPlugged->currentText());
   settings.setValue("PowerKeyBattery", powerKeyBattery->currentText());
-  settings.setValue("PowerProfilePlugged", powerProfilePlugged->currentText());
-  settings.setValue("PowerProfileBattery", powerProfileBattery->currentText());
+
+  QString profilePluggedDisplayName = powerProfilePlugged->currentText();
+  QString profileBatteryDisplayName = powerProfileBattery->currentText();
+  QString profilePluggedName =
+      profileManager.getCommandNameForProfile(profilePluggedDisplayName);
+  QString profileBatteryName =
+      profileManager.getCommandNameForProfile(profileBatteryDisplayName);
+
+  settings.setValue("PowerProfilePlugged", profilePluggedName);
+  settings.setValue("PowerProfileBattery", profileBatteryName);
   mainWindow->hide();
 }
 
@@ -303,10 +304,10 @@ void Application::loadSettings() {
   loadComboSetting(lidCloseBattery, "LidCloseBattery");
   loadComboSetting(powerKeyPlugged, "PowerKeyPlugged");
   loadComboSetting(powerKeyBattery, "PowerKeyBattery");
-
-  // Store power profile settings to apply later
-  m_savedPowerProfilePlugged = settings.value("PowerProfilePlugged").toString();
-  m_savedPowerProfileBattery = settings.value("PowerProfileBattery").toString();
+  auto savedPlugged = profileManager.getDisplayNameForProfile(settings.value("PowerProfilePlugged").toString());
+  auto savedBattery = profileManager.getDisplayNameForProfile(settings.value("PowerProfileBattery").toString());
+  powerProfilePlugged->setCurrentIndex(powerProfilePlugged->findText(savedPlugged));
+  powerProfileBattery->setCurrentIndex(powerProfileBattery->findText(savedBattery));
 }
 
 void Application::onAppLoaded() {
@@ -323,6 +324,7 @@ void Application::loadComboSetting(QComboBox *combo, const QString &key) {
       combo->setCurrentIndex(index);
   }
 }
+
 int main(int argc, char *argv[]) {
   Application app(argc, argv);
   return app.exec();

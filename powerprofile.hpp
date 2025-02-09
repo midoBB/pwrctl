@@ -1,19 +1,24 @@
 #pragma once
 
+#include <QHash>
+#include <QObject>
+#include <QPair>
 #include <QString>
 #include <QStringList>
-#include <QObject>
+#include <QHash>
 
 class PowerProfileManager : public QObject {
   Q_OBJECT
 public:
-    PowerProfileManager(QObject *parent = nullptr);
+  PowerProfileManager(QObject *parent = nullptr);
 
-    QStringList getPowerProfiles();
-    QString getActivePowerProfile();
+  QHash<QString, QString> getPowerProfiles();
+  QPair<QString, QString> getActivePowerProfile();
+  QString getCommandNameForProfile(const QString &profileDisplayName) const;
+  QString getDisplayNameForProfile(const QString &profileName) const;
 
 private:
-    void parsePowerProfiles(const QString &output);
-    QStringList powerProfiles;
-    QString activeProfile;
+  void parsePowerProfiles(const QString &output);
+  QPair<QString, QString> activeProfile;
+  QHash<QString, QString> profiles;
 };
