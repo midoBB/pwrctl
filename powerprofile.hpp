@@ -16,6 +16,7 @@ public:
   QPair<QString, QString> getActivePowerProfile();
   QString getCommandNameForProfile(const QString &profileDisplayName) const;
   QString getDisplayNameForProfile(const QString &profileName) const;
+  void applyPowerProfile(const QString &profile);
 
 private:
   void parsePowerProfiles(const QString &output);

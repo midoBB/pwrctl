@@ -61,3 +61,12 @@ QString PowerProfileManager::getDisplayNameForProfile(
     const QString &profileName) const {
   return profiles.value(profileName);
 }
+
+void PowerProfileManager::applyPowerProfile(const QString &profile) {
+    QProcess *process = new QProcess();
+    process->setProgram("powerprofilesctl");
+    process->setArguments(QStringList() << "set" << profile);
+    process->start();
+    process->waitForFinished();
+    qDebug() << "Setting power profile to: " << profile;
+}

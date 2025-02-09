@@ -19,6 +19,24 @@ Worker::~Worker() { timer->stop(); }
 
 void Worker::applyPowerSettings() {
   qDebug() << "applyPowerSettings called, onBattery:" << onBattery;
+  QString settingsPath = QStandardPaths::writableLocation(QStandardPaths::ConfigLocation) + "/" +
+                         QCoreApplication::applicationName() + "/settings.ini";
+  QSettings settings(settingsPath, QSettings::IniFormat);
+
+  QString displayKey = onBattery ? "DisplayBattery" : "DisplayPlugged";
+  QString sleepKey = onBattery ? "SleepBattery" : "SleepPlugged";
+  QString lidCloseKey = onBattery ? "LidCloseBattery" : "LidClosePlugged";
+  QString powerKeyKey = onBattery ? "PowerKeyBattery" : "PowerKeyPlugged";
+  QString powerProfileKey = onBattery ? "PowerProfileBattery" : "PowerProfilePlugged";
+
+  qDebug() << displayKey << ": " << settings.value(displayKey).toString();
+  qDebug() << sleepKey << ": " << settings.value(sleepKey).toString();
+  qDebug() << lidCloseKey << ": " << settings.value(lidCloseKey).toString();
+  qDebug() << powerKeyKey << ": " << settings.value(powerKeyKey).toString();
+
+  QString powerProfile = settings.value(powerProfileKey).toString();
+  PowerProfileManager profileManager;
+  profileManager.applyPowerProfile(powerProfile);
 }
 
 void Worker::doWork() {

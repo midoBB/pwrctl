@@ -24,6 +24,7 @@
 #include <QSettings>
 #include <QStandardPaths>
 #include <QDir>
+#include <QProcess>
 
 class Worker : public QObject {
   Q_OBJECT
