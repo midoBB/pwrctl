@@ -16,7 +16,6 @@ void Worker::initialize() {
   process->waitForFinished();
 
   QString output = process->readAllStandardOutput();
-  qDebug() << "powerprofilesctl list output:\n" << output;
 
   parsePowerProfiles(output);
 }
@@ -24,7 +23,6 @@ void Worker::initialize() {
 Worker::~Worker() {
   timer->stop();
   delete timer;
-  qDebug() << "Worker destroyed";
 }
 
 bool Worker::readPowerSupplyStatus() {
@@ -41,10 +39,9 @@ bool Worker::readPowerSupplyStatus() {
     return false; // Assume plugged in if file can't be read
   }
 }
-QString capitalise_each_word(const QString& sentence)
-{
+QString capitalise_each_word(const QString &sentence) {
   QStringList words = sentence.split(" ", Qt::SkipEmptyParts);
-  for (QString& word : words)
+  for (QString &word : words)
     word.front() = word.front().toUpper();
 
   return words.join(" ");
@@ -62,14 +59,12 @@ void Worker::parsePowerProfiles(const QString &output) {
       bool isActive = profileName.startsWith("*");
       if (isActive) {
         profileName = profileName.mid(1).trimmed();
-        activeProfile = capitalise_each_word(profileName);
+        activeProfile = capitalise_each_word(profileName.replace("-", " "));
       }
-      profiles.append(capitalise_each_word(profileName));
+      profiles.append(capitalise_each_word(profileName.replace("-", " ")));
     }
   }
 
-  qDebug() << "Available profiles:" << profiles;
-  qDebug() << "Active profile:" << activeProfile;
   emit powerProfilesChanged(profiles, activeProfile);
 }
 
@@ -111,6 +106,8 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
   this->lidCloseBattery = new QComboBox();
   this->powerProfilePlugged = new QComboBox();
   this->powerProfileBattery = new QComboBox();
+  this->powerKeyPlugged = new QComboBox();
+  this->powerKeyBattery = new QComboBox();
   powerProfilePlugged->setEnabled(false);
   powerProfileBattery->setEnabled(false);
   mainWindow->setWindowTitle("Power Settings");
@@ -180,10 +177,26 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
   mainLayout->addWidget(lidClosePlugged, 3, 1);
   mainLayout->addWidget(lidCloseBattery, 3, 2);
 
+  // Power Key Action
+  mainLayout->addWidget(new QLabel("Power Key Action:"), 4, 0);
+  QStringList powerKeyActions = {"Ignore",
+                                 "Poweroff",
+                                 "Reboot",
+                                 "Suspend",
+                                 "Hibernate",
+                                 "Hybrid Sleep",
+                                 "Lock"};
+  for (const auto &action : powerKeyActions) {
+    powerKeyPlugged->addItem(action);
+    powerKeyBattery->addItem(action);
+  }
+  mainLayout->addWidget(powerKeyPlugged, 4, 1);
+  mainLayout->addWidget(powerKeyBattery, 4, 2);
+
   // Power Profiles
-  mainLayout->addWidget(new QLabel("Power Profile:"), 4, 0);
-  mainLayout->addWidget(powerProfilePlugged, 4, 1);
-  mainLayout->addWidget(powerProfileBattery, 4, 2);
+  mainLayout->addWidget(new QLabel("Power Profile:"), 5, 0);
+  mainLayout->addWidget(powerProfilePlugged, 5, 1);
+  mainLayout->addWidget(powerProfileBattery, 5, 2);
 
   // Buttons
   QPushButton *saveBtn = new QPushButton("Save changes");
@@ -192,7 +205,7 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
   btnLayout->addStretch();
   btnLayout->addWidget(saveBtn);
   btnLayout->addWidget(cancelBtn);
-  mainLayout->addLayout(btnLayout, 5, 0, 1, 3);
+  mainLayout->addLayout(btnLayout, 6, 0, 1, 3);
 
   // Connections
   connect(cancelBtn, &QPushButton::clicked, mainWindow, &QMainWindow::hide);
@@ -225,7 +238,6 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
   connect(saveBtn, &QPushButton::clicked, this, &Application::handleSave);
   connect(cancelBtn, &QPushButton::clicked, this, &Application::handleCancel);
   connect(this, &Application::powerSourceChanged, [this](bool onBattery) {
-    qDebug() << "Power source changed to" << (onBattery ? "Battery" : "AC");
     QFont font;
     font.setBold(true);
 
@@ -242,7 +254,6 @@ Application::~Application() {
   worker->timer->stop();
   workerThread->quit();
   workerThread->wait();
-  qDebug() << "Application destroyed";
 }
 
 void Application::updatePowerProfiles(const QStringList &profiles,
@@ -267,9 +278,6 @@ void Application::updatePowerProfiles(const QStringList &profiles,
   powerProfilePlugged->setEnabled(true);
   powerProfileBattery->setEnabled(true);
 
-  qDebug() << "Power profiles updated in Application:";
-  qDebug() << "Available profiles:" << powerProfiles;
-  qDebug() << "Active profile:" << activeProfile;
 }
 
 void Application::handleCancel() { mainWindow->hide(); }
@@ -280,6 +288,8 @@ void Application::handleSave() {
   qDebug() << "Sleep Battery Index:" << sleepBattery->currentIndex();
   qDebug() << "Lid Close Plugged Index:" << lidClosePlugged->currentIndex();
   qDebug() << "Lid Close Battery Index:" << lidCloseBattery->currentIndex();
+  qDebug() << "Power Key Plugged Index:" << powerKeyPlugged->currentIndex();
+  qDebug() << "Power Key Battery Index:" << powerKeyBattery->currentIndex();
 
   // Optional: Also show the text values
   qDebug() << "Values:";
@@ -289,6 +299,8 @@ void Application::handleSave() {
   qDebug() << " - Battery sleep:" << sleepBattery->currentText();
   qDebug() << " - Lid action Plugged:" << lidClosePlugged->currentText();
   qDebug() << " - Lid action Battery:" << lidCloseBattery->currentText();
+  qDebug() << " - Power key Plugged:" << powerKeyPlugged->currentText();
+  qDebug() << " - Power key Battery:" << powerKeyBattery->currentText();
 
   mainWindow->hide();
 }

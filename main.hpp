@@ -72,6 +72,8 @@ private:
   QComboBox *lidCloseBattery;
   QComboBox *powerProfilePlugged;
   QComboBox *powerProfileBattery;
+  QComboBox *powerKeyPlugged;
+  QComboBox *powerKeyBattery;
   QThread *workerThread;
   Worker *worker;
   QStringList powerProfiles;
