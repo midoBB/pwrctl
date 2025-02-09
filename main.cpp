@@ -34,7 +34,7 @@ void Worker::doWork() {
 
 Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
   setQuitOnLastWindowClosed(false);
-
+  connect(this, &Application::appLoaded, this, &Application::onAppLoaded);
   workerThread = new QThread(this);
   worker = new Worker();
   worker->moveToThread(workerThread);
@@ -44,7 +44,13 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
   connect(worker, &Worker::onBatteryChanged, worker,
           &Worker::applyPowerSettings);
   connect(workerThread, &QThread::finished, worker, &QObject::deleteLater);
-
+  connect(worker, &Worker::workerFinished, [this]() {
+    // NOTE: Loading steps are: 1. worker initialized, 2. gui loaded
+    loadingStep++;
+    if (loadingStep == 2) {
+      emit appLoaded();
+    }
+  });
   workerThread->start();
 
   mainWindow = new QMainWindow();
@@ -172,7 +178,6 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
   centralWidget->setLayout(mainLayout);
   mainWindow->setCentralWidget(centralWidget);
   mainWindow->resize(400, 200);
-  // mainWindow->hide();
 
   // Create tray icon
   trayIcon = new QSystemTrayIcon(QIcon(":/icon.png"), this);
@@ -217,13 +222,10 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
   emit powerProfilesChanged(profiles, activeProfile);
 
   loadSettings();
-  connect(worker, &Worker::workerFinished, [this]() {
-    if (guiLoaded) {
-      emit appLoaded();
-    }
-  });
-  connect(this, &Application::appLoaded, this, &Application::onAppLoaded);
-  guiLoaded = true;
+  loadingStep++;
+  if (loadingStep == 2) {
+    emit appLoaded();
+  }
 }
 
 Application::~Application() {
@@ -289,6 +291,7 @@ void Application::handleSave() {
 
   settings.setValue("PowerProfilePlugged", profilePluggedName);
   settings.setValue("PowerProfileBattery", profileBatteryName);
+  QTimer::singleShot(0, worker, &Worker::applyPowerSettings);
   mainWindow->hide();
 }
 
@@ -304,13 +307,18 @@ void Application::loadSettings() {
   loadComboSetting(lidCloseBattery, "LidCloseBattery");
   loadComboSetting(powerKeyPlugged, "PowerKeyPlugged");
   loadComboSetting(powerKeyBattery, "PowerKeyBattery");
-  auto savedPlugged = profileManager.getDisplayNameForProfile(settings.value("PowerProfilePlugged").toString());
-  auto savedBattery = profileManager.getDisplayNameForProfile(settings.value("PowerProfileBattery").toString());
-  powerProfilePlugged->setCurrentIndex(powerProfilePlugged->findText(savedPlugged));
-  powerProfileBattery->setCurrentIndex(powerProfileBattery->findText(savedBattery));
+  auto savedPlugged = profileManager.getDisplayNameForProfile(
+      settings.value("PowerProfilePlugged").toString());
+  auto savedBattery = profileManager.getDisplayNameForProfile(
+      settings.value("PowerProfileBattery").toString());
+  powerProfilePlugged->setCurrentIndex(
+      powerProfilePlugged->findText(savedPlugged));
+  powerProfileBattery->setCurrentIndex(
+      powerProfileBattery->findText(savedBattery));
 }
 
 void Application::onAppLoaded() {
+  qDebug() << "onAppLoaded";
   QTimer::singleShot(0, worker, &Worker::applyPowerSettings);
 }
 

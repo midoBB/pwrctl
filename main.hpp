@@ -72,7 +72,7 @@ private:
   void loadSettings();
   void loadComboSetting(QComboBox* combo, const QString& key);
   QString getSettingsPath();
-  bool guiLoaded = false;
+  short loadingStep = 0;
   bool m_onBattery = false;
   QMainWindow *mainWindow;
   QSystemTrayIcon *trayIcon;
