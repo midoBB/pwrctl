@@ -34,6 +34,7 @@ public:
 public slots:
   void doWork();
   void initialize();
+  void applyPowerSettings();
 
 signals:
   void onBatteryChanged(bool onBattery);
@@ -60,6 +61,7 @@ signals:
 public slots:
   void updatePowerProfiles(const QStringList &profiles,
                            const QString &activeProfile);
+  void onAppLoaded();
 
 private slots:
   void handleSave();

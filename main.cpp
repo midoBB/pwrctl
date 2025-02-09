@@ -19,6 +19,7 @@ void Worker::initialize() {
 
   parsePowerProfiles(output);
   timer->start();
+  emit workerFinished();
 }
 
 Worker::~Worker() {
@@ -69,13 +70,16 @@ void Worker::parsePowerProfiles(const QString &output) {
   emit powerProfilesChanged(profiles, activeProfile);
 }
 
+void Worker::applyPowerSettings() {
+  qDebug() << "applyPowerSettings called, onBattery:" << onBattery;
+}
+
 void Worker::doWork() {
   bool isOnline = readPowerSupplyStatus();
   bool newOnBattery = !isOnline;
 
   if (newOnBattery != onBattery) {
     onBattery = newOnBattery;
-    qDebug() << "onBattery" << onBattery;
     emit onBatteryChanged(onBattery);
   }
 }
@@ -89,6 +93,7 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
   connect(workerThread, &QThread::started, worker, &Worker::initialize);
   connect(worker, &Worker::onBatteryChanged, this,
           &Application::powerSourceChanged);
+  connect(worker, &Worker::onBatteryChanged, worker, &Worker::applyPowerSettings);
   connect(workerThread, &QThread::finished, worker, &QObject::deleteLater);
 
   workerThread->start();
@@ -260,7 +265,7 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
       emit appLoaded();
     }
   });
-  connect(this, &Application::appLoaded, []() { qDebug() << "App loaded!"; });
+  connect(this, &Application::appLoaded, this, &Application::onAppLoaded);
   guiLoaded = true;
 }
 
@@ -347,6 +352,10 @@ void Application::loadSettings() {
   // Store power profile settings to apply later
   m_savedPowerProfilePlugged = settings.value("PowerProfilePlugged").toString();
   m_savedPowerProfileBattery = settings.value("PowerProfileBattery").toString();
+}
+
+void Application::onAppLoaded() {
+  QTimer::singleShot(0, worker, &Worker::applyPowerSettings);
 }
 
 // Helper function to load a QComboBox setting
