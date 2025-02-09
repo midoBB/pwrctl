@@ -112,11 +112,23 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
   powerProfileBattery->setEnabled(false);
   mainWindow->setWindowTitle("Power Settings");
   QWidget *centralWidget = new QWidget();
+  centralWidget->setStyleSheet("background-color: transparent;");
+  centralWidget->setContentsMargins(10, 10, 10, 10);
+
+  QGraphicsDropShadowEffect *shadowEffect =
+      new QGraphicsDropShadowEffect(centralWidget);
+  shadowEffect->setBlurRadius(10);
+  shadowEffect->setColor(QColor(0, 0, 0, 80));
+  shadowEffect->setOffset(0);
+  centralWidget->setGraphicsEffect(shadowEffect);
+
   QGridLayout *mainLayout = new QGridLayout(centralWidget);
   mainLayout->addWidget(new QLabel(), 0, 0); // Empty corner
+
   // Header
   // Create header widgets with icons
   QWidget *headerRow = new QWidget();
+  headerRow->setContentsMargins(0, 20, 0, 0);
   QHBoxLayout *headerLayout = new QHBoxLayout(headerRow);
 
   // Empty spacer for first column
@@ -179,12 +191,8 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
 
   // Power Key Action
   mainLayout->addWidget(new QLabel("Power Key Action:"), 4, 0);
-  QStringList powerKeyActions = {"Ignore",
-                                 "Poweroff",
-                                 "Reboot",
-                                 "Suspend",
-                                 "Hibernate",
-                                 "Hybrid Sleep",
+  QStringList powerKeyActions = {"Ignore",  "Poweroff",  "Reboot",
+                                 "Suspend", "Hibernate", "Hybrid Sleep",
                                  "Lock"};
   for (const auto &action : powerKeyActions) {
     powerKeyPlugged->addItem(action);
@@ -277,7 +285,6 @@ void Application::updatePowerProfiles(const QStringList &profiles,
   // Enable the combo boxes
   powerProfilePlugged->setEnabled(true);
   powerProfileBattery->setEnabled(true);
-
 }
 
 void Application::handleCancel() { mainWindow->hide(); }

@@ -17,6 +17,7 @@
 #include <QThread>
 #include <QTimer>
 #include <qnamespace.h>
+#include <QGraphicsDropShadowEffect>
 
 class Worker : public QObject {
   Q_OBJECT
