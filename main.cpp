@@ -1,8 +1,63 @@
 #include "main.hpp"
-#include <iostream>
+
+const QString POWER_SUPPLY_PATH = "/sys/class/power_supply/ADP1/online";
+
+Worker::Worker(QObject *parent) : QObject(parent) {
+  timer = new QTimer(this);
+  connect(timer, &QTimer::timeout, this, &Worker::doWork);
+  timer->setInterval(5000);
+  onBattery = !readPowerSupplyStatus();
+}
+
+Worker::~Worker() {
+    timer->stop();
+    delete timer;
+    qDebug() << "Worker destroyed";
+}
+
+bool Worker::readPowerSupplyStatus() {
+  QFile inputFile(POWER_SUPPLY_PATH);
+  if (inputFile.open(QIODevice::ReadOnly)) {
+    QTextStream in(&inputFile);
+    QString line = in.readLine();
+    inputFile.close();
+    bool isOnline = (line == "1");
+    return isOnline;
+  } else {
+    qWarning() << "Could not open power supply status file:"
+               << POWER_SUPPLY_PATH;
+    return false; // Assume plugged in if file can't be read
+  }
+}
+
+void Worker::doWork() {
+  bool isOnline = readPowerSupplyStatus();
+  bool newOnBattery = !isOnline;
+
+  if (newOnBattery != onBattery) {
+    onBattery = newOnBattery;
+    emit onBatteryChanged(onBattery);
+  }
+}
 
 Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
   setQuitOnLastWindowClosed(false);
+
+  workerThread = new QThread(this);
+  worker = new Worker();
+  worker->moveToThread(workerThread);
+
+  connect(workerThread, &QThread::started, worker, [this]() {
+    worker->timer->start();
+  });
+  connect(worker, &Worker::onBatteryChanged, this,
+          &Application::powerSourceChanged);
+  connect(workerThread, &QThread::finished, worker, &QObject::deleteLater);
+  connect(workerThread, &QThread::finished, workerThread,
+          &QObject::deleteLater);
+
+  workerThread->start();
+
   mainWindow = new QMainWindow();
   this->displayPlugged = new QComboBox();
   this->displayBattery = new QComboBox();
@@ -116,10 +171,8 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
   trayIcon->show();
   connect(saveBtn, &QPushButton::clicked, this, &Application::handleSave);
   connect(cancelBtn, &QPushButton::clicked, this, &Application::handleCancel);
-  setupPowerMonitoring();
   connect(this, &Application::powerSourceChanged, [this](bool onBattery) {
     qDebug() << "Power source changed to" << (onBattery ? "Battery" : "AC");
-    // Example: Highlight active column
     QFont font;
     font.setBold(true);
 
@@ -131,62 +184,14 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
         QString("Power Settings - %1").arg(onBattery ? "Battery" : "AC Power"));
   });
 }
-void Application::setupPowerMonitoring() {
-    QDBusConnection systemBus = QDBusConnection::systemBus();
 
-    // Connect to PropertiesChanged signal
-    bool connected = systemBus.connect(
-        "org.freedesktop.UPower",
-        "/org/freedesktop/UPower",
-        "org.freedesktop.DBus.Properties",
-        "PropertiesChanged",
-        this,
-        SLOT(handleDBusSignal(QDBusMessage))
-    );
-
-    if (!connected) {
-        qWarning() << "Failed to connect to D-Bus signal!";
-    }
-
-    // Get initial state
-    QDBusInterface upowerInterface(
-        "org.freedesktop.UPower",
-        "/org/freedesktop/UPower",
-        "org.freedesktop.UPower",
-        systemBus
-    );
-
-    if (upowerInterface.isValid()) {
-        m_onBattery = upowerInterface.property("OnBattery").toBool();
-        qDebug() << "Initial power state:" << (m_onBattery ? "Battery" : "AC");
-    } else {
-        qCritical() << "Failed to access UPower interface!";
-    }
+Application::~Application() {
+    worker->timer->stop();
+    workerThread->quit();
+    workerThread->wait();
+    qDebug() << "Application destroyed";
 }
 
-void Application::handleDBusSignal(QDBusMessage message) {
-    QList<QVariant> args = message.arguments();
-    if (args.count() < 3) return;
-
-    QString interfaceName = args[0].toString();
-    QVariantMap changedProps = args[1].value<QVariantMap>();
-    QStringList invalidatedProps = args[2].toStringList();
-
-    if (interfaceName == "org.freedesktop.UPower" && changedProps.contains("OnBattery")) {
-        bool newState = changedProps["OnBattery"].toBool();
-        if (newState != m_onBattery) {
-            m_onBattery = newState;
-
-            // Write to terminal with timestamp and state
-            QString logMessage = QString("[%1] Power source changed to: %2")
-                .arg(QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss"))
-                .arg(m_onBattery ? "Battery" : "AC Power");
-
-            qDebug().noquote() << logMessage;  // Formatted debug output
-            std::cout << logMessage.toStdString() << std::endl;  // Always print to terminal
-        }
-    }
-}
 void Application::handleCancel() { mainWindow->hide(); }
 void Application::handleSave() {
   qDebug() << "Display Plugged Index:" << displayPlugged->currentIndex();
