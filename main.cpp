@@ -256,12 +256,24 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
     mainWindow->setWindowTitle(
         QString("Power Settings - %1").arg(onBattery ? "Battery" : "AC Power"));
   });
+  loadSettings();
 }
 
 Application::~Application() {
   worker->timer->stop();
   workerThread->quit();
   workerThread->wait();
+}
+
+QString Application::getSettingsPath() {
+  QString path= QStandardPaths::writableLocation(QStandardPaths::ConfigLocation)
+                    + "/" + QCoreApplication::applicationName();
+  QDir dir(path);
+  if (!dir.exists()) {
+    dir.mkpath(path);
+  }
+  QString fileName = path + "/settings.ini";
+  return fileName;
 }
 
 void Application::updatePowerProfiles(const QStringList &profiles,
@@ -285,31 +297,65 @@ void Application::updatePowerProfiles(const QStringList &profiles,
   // Enable the combo boxes
   powerProfilePlugged->setEnabled(true);
   powerProfileBattery->setEnabled(true);
+  if (!m_savedPowerProfilePlugged.isEmpty()) {
+    int idx = powerProfilePlugged->findText(m_savedPowerProfilePlugged);
+    if (idx != -1)
+      powerProfilePlugged->setCurrentIndex(idx);
+    m_savedPowerProfilePlugged.clear();
+  }
+
+  if (!m_savedPowerProfileBattery.isEmpty()) {
+    int idx = powerProfileBattery->findText(m_savedPowerProfileBattery);
+    if (idx != -1)
+      powerProfileBattery->setCurrentIndex(idx);
+    m_savedPowerProfileBattery.clear();
+  }
 }
 
 void Application::handleCancel() { mainWindow->hide(); }
 void Application::handleSave() {
-  qDebug() << "Display Plugged Index:" << displayPlugged->currentIndex();
-  qDebug() << "Display Battery Index:" << displayBattery->currentIndex();
-  qDebug() << "Sleep Plugged Index:" << sleepPlugged->currentIndex();
-  qDebug() << "Sleep Battery Index:" << sleepBattery->currentIndex();
-  qDebug() << "Lid Close Plugged Index:" << lidClosePlugged->currentIndex();
-  qDebug() << "Lid Close Battery Index:" << lidCloseBattery->currentIndex();
-  qDebug() << "Power Key Plugged Index:" << powerKeyPlugged->currentIndex();
-  qDebug() << "Power Key Battery Index:" << powerKeyBattery->currentIndex();
+  QSettings settings(getSettingsPath(), QSettings::IniFormat);
 
-  // Optional: Also show the text values
-  qDebug() << "Values:";
-  qDebug() << " - Plugged display:" << displayPlugged->currentText();
-  qDebug() << " - Battery display:" << displayBattery->currentText();
-  qDebug() << " - Plugged sleep:" << sleepPlugged->currentText();
-  qDebug() << " - Battery sleep:" << sleepBattery->currentText();
-  qDebug() << " - Lid action Plugged:" << lidClosePlugged->currentText();
-  qDebug() << " - Lid action Battery:" << lidCloseBattery->currentText();
-  qDebug() << " - Power key Plugged:" << powerKeyPlugged->currentText();
-  qDebug() << " - Power key Battery:" << powerKeyBattery->currentText();
-
+  settings.setValue("DisplayPlugged", displayPlugged->currentText());
+  settings.setValue("DisplayBattery", displayBattery->currentText());
+  settings.setValue("SleepPlugged", sleepPlugged->currentText());
+  settings.setValue("SleepBattery", sleepBattery->currentText());
+  settings.setValue("LidClosePlugged", lidClosePlugged->currentText());
+  settings.setValue("LidCloseBattery", lidCloseBattery->currentText());
+  settings.setValue("PowerKeyPlugged", powerKeyPlugged->currentText());
+  settings.setValue("PowerKeyBattery", powerKeyBattery->currentText());
+  settings.setValue("PowerProfilePlugged", powerProfilePlugged->currentText());
+  settings.setValue("PowerProfileBattery", powerProfileBattery->currentText());
   mainWindow->hide();
+}
+
+void Application::loadSettings() {
+  QSettings settings(getSettingsPath(), QSettings::IniFormat);
+
+  // Restore non-power-profile settings
+  loadComboSetting(displayPlugged, "DisplayPlugged");
+  loadComboSetting(displayBattery, "DisplayBattery");
+  loadComboSetting(sleepPlugged, "SleepPlugged");
+  loadComboSetting(sleepBattery, "SleepBattery");
+  loadComboSetting(lidClosePlugged, "LidClosePlugged");
+  loadComboSetting(lidCloseBattery, "LidCloseBattery");
+  loadComboSetting(powerKeyPlugged, "PowerKeyPlugged");
+  loadComboSetting(powerKeyBattery, "PowerKeyBattery");
+
+  // Store power profile settings to apply later
+  m_savedPowerProfilePlugged = settings.value("PowerProfilePlugged").toString();
+  m_savedPowerProfileBattery = settings.value("PowerProfileBattery").toString();
+}
+
+// Helper function to load a QComboBox setting
+void Application::loadComboSetting(QComboBox *combo, const QString &key) {
+  QSettings settings;
+  QString value = settings.value(key).toString();
+  if (!value.isEmpty()) {
+    int index = combo->findText(value);
+    if (index != -1)
+      combo->setCurrentIndex(index);
+  }
 }
 int main(int argc, char *argv[]) {
   Application app(argc, argv);

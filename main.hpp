@@ -1,3 +1,4 @@
+#pragma once
 #include <QAction>
 #include <QApplication>
 #include <QComboBox>
@@ -16,8 +17,12 @@
 #include <QTextStream>
 #include <QThread>
 #include <QTimer>
+#include <qglobal.h>
 #include <qnamespace.h>
 #include <QGraphicsDropShadowEffect>
+#include <QSettings>
+#include <QStandardPaths>
+#include <QDir>
 
 class Worker : public QObject {
   Q_OBJECT
@@ -54,14 +59,16 @@ public slots:
   void updatePowerProfiles(const QStringList &profiles,
                            const QString &activeProfile);
 
-private:
-  void startWorker();
-
 private slots:
   void handleSave();
   void handleCancel();
 
 private:
+  void startWorker();
+  void loadSettings();
+  void loadComboSetting(QComboBox* combo, const QString& key);
+  QString getSettingsPath();
+
   bool m_onBattery = false;
   QMainWindow *mainWindow;
   QSystemTrayIcon *trayIcon;
@@ -79,4 +86,6 @@ private:
   Worker *worker;
   QStringList powerProfiles;
   QString activeProfile;
+  QString m_savedPowerProfilePlugged;
+  QString m_savedPowerProfileBattery;
 };
