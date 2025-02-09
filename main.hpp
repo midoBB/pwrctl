@@ -39,6 +39,7 @@ signals:
   void onBatteryChanged(bool onBattery);
   void powerProfilesChanged(const QStringList &profiles,
                             const QString &activeProfile);
+  void workerFinished();
 
 private:
   bool readPowerSupplyStatus();
@@ -54,6 +55,7 @@ public:
 
 signals:
   void powerSourceChanged(bool onBattery);
+  void appLoaded();
 
 public slots:
   void updatePowerProfiles(const QStringList &profiles,
@@ -68,7 +70,7 @@ private:
   void loadSettings();
   void loadComboSetting(QComboBox* combo, const QString& key);
   QString getSettingsPath();
-
+  bool guiLoaded = false;
   bool m_onBattery = false;
   QMainWindow *mainWindow;
   QSystemTrayIcon *trayIcon;

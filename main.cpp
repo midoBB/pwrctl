@@ -18,6 +18,7 @@ void Worker::initialize() {
   QString output = process->readAllStandardOutput();
 
   parsePowerProfiles(output);
+  timer->start();
 }
 
 Worker::~Worker() {
@@ -74,6 +75,7 @@ void Worker::doWork() {
 
   if (newOnBattery != onBattery) {
     onBattery = newOnBattery;
+    qDebug() << "onBattery" << onBattery;
     emit onBatteryChanged(onBattery);
   }
 }
@@ -85,15 +87,9 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
   worker = new Worker();
   worker->moveToThread(workerThread);
   connect(workerThread, &QThread::started, worker, &Worker::initialize);
-  connect(workerThread, &QThread::started, worker,
-          [this]() { worker->timer->start(); });
   connect(worker, &Worker::onBatteryChanged, this,
           &Application::powerSourceChanged);
-  connect(worker, &Worker::powerProfilesChanged, this,
-          &Application::updatePowerProfiles);
   connect(workerThread, &QThread::finished, worker, &QObject::deleteLater);
-  connect(workerThread, &QThread::finished, workerThread,
-          &QObject::deleteLater);
 
   workerThread->start();
 
@@ -257,17 +253,26 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
         QString("Power Settings - %1").arg(onBattery ? "Battery" : "AC Power"));
   });
   loadSettings();
+  connect(worker, &Worker::powerProfilesChanged, this,
+          &Application::updatePowerProfiles);
+  connect(worker, &Worker::workerFinished, [this]() {
+    if (guiLoaded) {
+      emit appLoaded();
+    }
+  });
+  connect(this, &Application::appLoaded, []() { qDebug() << "App loaded!"; });
+  guiLoaded = true;
 }
 
 Application::~Application() {
-  worker->timer->stop();
   workerThread->quit();
   workerThread->wait();
 }
 
 QString Application::getSettingsPath() {
-  QString path= QStandardPaths::writableLocation(QStandardPaths::ConfigLocation)
-                    + "/" + QCoreApplication::applicationName();
+  QString path =
+      QStandardPaths::writableLocation(QStandardPaths::ConfigLocation) + "/" +
+      QCoreApplication::applicationName();
   QDir dir(path);
   if (!dir.exists()) {
     dir.mkpath(path);
@@ -278,9 +283,6 @@ QString Application::getSettingsPath() {
 
 void Application::updatePowerProfiles(const QStringList &profiles,
                                       const QString &activeProfile) {
-  this->powerProfiles = profiles;
-  this->activeProfile = activeProfile;
-
   // Clear existing items
   powerProfilePlugged->clear();
   powerProfileBattery->clear();
