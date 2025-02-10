@@ -10,7 +10,11 @@ set(CMAKE_AUTOUIC ON)
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets DBus)
 
 qt_add_executable(pwrctl
-    main.hpp main.cpp powerprofile.hpp powerprofile.cpp batterymanager.hpp batterymanager.cpp
+    main.hpp main.cpp
+    powerprofile.hpp powerprofile.cpp
+    batterymanager.hpp batterymanager.cpp
+    swayidlemanager.hpp swayidlemanager.cpp
+    logindmanager.hpp logindmanager.cpp
 )
 
 qt_add_resources(pwrctl "resources"
