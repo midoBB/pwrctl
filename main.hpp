@@ -1,5 +1,6 @@
 #pragma once
 #include "powerprofile.hpp"
+#include "swayidlemanager.hpp"
 #include <QAction>
 #include <QApplication>
 #include <QComboBox>
@@ -44,6 +45,7 @@ signals:
 
 private:
   bool readPowerSupplyStatus();
+  SwayIdleManager swayIdleManager;
   bool onBattery = false;
 };
 

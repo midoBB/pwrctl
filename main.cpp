@@ -12,6 +12,7 @@ Worker::Worker(QObject *parent) : QObject(parent) {
 
 void Worker::initialize() {
   timer->start();
+  swayIdleManager.parseConfig();
   emit workerFinished();
 }
 
@@ -336,7 +337,6 @@ void Application::loadSettings() {
 }
 
 void Application::onAppLoaded() {
-  qDebug() << "onAppLoaded";
   QTimer::singleShot(0, worker, &Worker::applyPowerSettings);
 }
 
