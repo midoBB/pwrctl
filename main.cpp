@@ -1,6 +1,13 @@
 #include "main.hpp"
+#include "QOrderedMap.h"
 #include "batterymanager.hpp"
 #include "powerprofile.hpp"
+#include <cstdint>
+static const OrderedMap<QString, int16_t> timeouts = {
+    {"2 minutes", 120},  {"5 minutes", 300},   {"10 minutes", 600},
+    {"15 minutes", 900}, {"30 minutes", 1800}, {"1 hour", 3600},
+    {"Never", -1},
+};
 
 Worker::Worker(QObject *parent) : QObject(parent) {
   timer = new QTimer(this);
@@ -20,15 +27,17 @@ Worker::~Worker() { timer->stop(); }
 
 void Worker::applyPowerSettings() {
   qDebug() << "applyPowerSettings called, onBattery:" << onBattery;
-  QString settingsPath = QStandardPaths::writableLocation(QStandardPaths::ConfigLocation) + "/" +
-                         QCoreApplication::applicationName() + "/settings.ini";
+  QString settingsPath =
+      QStandardPaths::writableLocation(QStandardPaths::ConfigLocation) + "/" +
+      QCoreApplication::applicationName() + "/settings.ini";
   QSettings settings(settingsPath, QSettings::IniFormat);
 
   QString displayKey = onBattery ? "DisplayBattery" : "DisplayPlugged";
   QString sleepKey = onBattery ? "SleepBattery" : "SleepPlugged";
   QString lidCloseKey = onBattery ? "LidCloseBattery" : "LidClosePlugged";
   QString powerKeyKey = onBattery ? "PowerKeyBattery" : "PowerKeyPlugged";
-  QString powerProfileKey = onBattery ? "PowerProfileBattery" : "PowerProfilePlugged";
+  QString powerProfileKey =
+      onBattery ? "PowerProfileBattery" : "PowerProfilePlugged";
 
   qDebug() << displayKey << ": " << settings.value(displayKey).toString();
   qDebug() << sleepKey << ": " << settings.value(sleepKey).toString();
@@ -137,8 +146,7 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
 
   // Turn off display
   mainLayout->addWidget(new QLabel("Turn off the display:"), 1, 0);
-  for (const auto &min :
-       {"2 minutes", "5 minutes", "10 minutes", "15 minutes"}) {
+  for (const auto &min : timeouts.keys()) {
     displayPlugged->addItem(min);
     displayBattery->addItem(min);
   }
@@ -147,8 +155,7 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
 
   // Put to sleep
   mainLayout->addWidget(new QLabel("Put the computer to sleep:"), 2, 0);
-  for (const auto &min :
-       {"2 minutes", "5 minutes", "10 minutes", "15 minutes"}) {
+  for (const auto &min : timeouts.keys()) {
     sleepPlugged->addItem(min);
     sleepBattery->addItem(min);
   }
@@ -157,7 +164,7 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
 
   // Lid close action
   mainLayout->addWidget(new QLabel("When I close the lid:"), 3, 0);
-  for (const auto &min : {"Do nothing", "Sleep", "Shutdown"}) {
+  for (const auto &min : timeouts.keys()) {
     lidClosePlugged->addItem(min);
     lidCloseBattery->addItem(min);
   }
