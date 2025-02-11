@@ -3,6 +3,13 @@
 #include <QObject>
 #include <QString>
 #include <QDir>
+#include <QDebug>
+#include <QFile>
+#include <QRegularExpression>
+#include <QRegularExpressionMatch>
+#include <QTextStream>
+#include <QProcess>
+#include <cstdint>
 
 class SwayIdleManager : public QObject {
   Q_OBJECT
@@ -10,7 +17,7 @@ public:
   SwayIdleManager(QObject *parent = nullptr);
 
   void parseConfig();
-  void applyConfig();
+  void applyConfig(int16_t lockTimeout, int16_t screenTimeout);
   QString getConfigPath();
 
 private:

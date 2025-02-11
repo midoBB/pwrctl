@@ -73,12 +73,13 @@ private slots:
 private:
   void startWorker();
   void loadSettings();
-  void loadComboSetting(QComboBox* combo, const QString& key);
   QString getSettingsPath();
   short loadingStep = 0;
   bool m_onBattery = false;
   QMainWindow *mainWindow;
   QSystemTrayIcon *trayIcon;
+  QComboBox *lockScreenPlugged;
+  QComboBox *lockScreenBattery;
   QComboBox *displayPlugged;
   QComboBox *displayBattery;
   QComboBox *sleepPlugged;

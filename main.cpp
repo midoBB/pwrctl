@@ -3,6 +3,7 @@
 #include "batterymanager.hpp"
 #include "powerprofile.hpp"
 #include <cstdint>
+
 static const OrderedMap<QString, int16_t> timeouts = {
     {"2 minutes", 120},  {"5 minutes", 300},   {"10 minutes", 600},
     {"15 minutes", 900}, {"30 minutes", 1800}, {"1 hour", 3600},
@@ -31,15 +32,16 @@ void Worker::applyPowerSettings() {
       QStandardPaths::writableLocation(QStandardPaths::ConfigLocation) + "/" +
       QCoreApplication::applicationName() + "/settings.ini";
   QSettings settings(settingsPath, QSettings::IniFormat);
-
+  QString lockScreenKey = onBattery ? "LockScreenBattery" : "LockScreenPlugged";
   QString displayKey = onBattery ? "DisplayBattery" : "DisplayPlugged";
   QString sleepKey = onBattery ? "SleepBattery" : "SleepPlugged";
   QString lidCloseKey = onBattery ? "LidCloseBattery" : "LidClosePlugged";
   QString powerKeyKey = onBattery ? "PowerKeyBattery" : "PowerKeyPlugged";
   QString powerProfileKey =
       onBattery ? "PowerProfileBattery" : "PowerProfilePlugged";
-
-  qDebug() << displayKey << ": " << settings.value(displayKey).toString();
+  int16_t lockTimeout =
+      timeouts.value(settings.value(lockScreenKey).toString());
+  int16_t screenTimeout = timeouts.value(settings.value(displayKey).toString());
   qDebug() << sleepKey << ": " << settings.value(sleepKey).toString();
   qDebug() << lidCloseKey << ": " << settings.value(lidCloseKey).toString();
   qDebug() << powerKeyKey << ": " << settings.value(powerKeyKey).toString();
@@ -47,6 +49,7 @@ void Worker::applyPowerSettings() {
   QString powerProfile = settings.value(powerProfileKey).toString();
   PowerProfileManager profileManager;
   profileManager.applyPowerProfile(powerProfile);
+  swayIdleManager.applyConfig(lockTimeout, screenTimeout);
 }
 
 void Worker::doWork() {
@@ -82,6 +85,8 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
   workerThread->start();
 
   mainWindow = new QMainWindow();
+  this->lockScreenPlugged = new QComboBox();
+  this->lockScreenBattery = new QComboBox();
   this->displayPlugged = new QComboBox();
   this->displayBattery = new QComboBox();
   this->sleepPlugged = new QComboBox();
@@ -143,36 +148,44 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
 
   // Add header row to main layout
   mainLayout->addWidget(headerRow, 0, 1, 1, 2); // Span all columns
-
+  // Lock screen
+  mainLayout->addWidget(new QLabel("Lock screen:"), 1, 0);
+  for (const auto &min : timeouts.keys()) {
+    lockScreenPlugged->addItem(min);
+    lockScreenBattery->addItem(min);
+  }
+  mainLayout->addWidget(lockScreenPlugged, 1, 1);
+  mainLayout->addWidget(lockScreenBattery, 1, 2);
   // Turn off display
-  mainLayout->addWidget(new QLabel("Turn off the display:"), 1, 0);
+  mainLayout->addWidget(new QLabel("Turn off the display:"), 2, 0);
   for (const auto &min : timeouts.keys()) {
     displayPlugged->addItem(min);
     displayBattery->addItem(min);
   }
-  mainLayout->addWidget(displayPlugged, 1, 1);
-  mainLayout->addWidget(displayBattery, 1, 2);
+  mainLayout->addWidget(displayPlugged, 2, 1);
+  mainLayout->addWidget(displayBattery, 2, 2);
 
   // Put to sleep
-  mainLayout->addWidget(new QLabel("Put the computer to sleep:"), 2, 0);
+  mainLayout->addWidget(new QLabel("Put the computer to sleep:"), 3, 0);
   for (const auto &min : timeouts.keys()) {
     sleepPlugged->addItem(min);
     sleepBattery->addItem(min);
   }
-  mainLayout->addWidget(sleepPlugged, 2, 1);
-  mainLayout->addWidget(sleepBattery, 2, 2);
+  mainLayout->addWidget(sleepPlugged, 3, 1);
+  mainLayout->addWidget(sleepBattery, 3, 2);
 
   // Lid close action
-  mainLayout->addWidget(new QLabel("When I close the lid:"), 3, 0);
-  for (const auto &min : timeouts.keys()) {
+  mainLayout->addWidget(new QLabel("When I close the lid:"), 4, 0);
+  QStringList lidCloseActions = {"Do Nothing", "Sleep", "Poweroff"};
+  for (const auto &min : lidCloseActions) {
     lidClosePlugged->addItem(min);
     lidCloseBattery->addItem(min);
   }
-  mainLayout->addWidget(lidClosePlugged, 3, 1);
-  mainLayout->addWidget(lidCloseBattery, 3, 2);
+  mainLayout->addWidget(lidClosePlugged, 4, 1);
+  mainLayout->addWidget(lidCloseBattery, 4, 2);
 
   // Power Key Action
-  mainLayout->addWidget(new QLabel("Power Key Action:"), 4, 0);
+  mainLayout->addWidget(new QLabel("Power Key Action:"), 5, 0);
   QStringList powerKeyActions = {"Ignore",  "Poweroff",  "Reboot",
                                  "Suspend", "Hibernate", "Hybrid Sleep",
                                  "Lock"};
@@ -180,13 +193,13 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
     powerKeyPlugged->addItem(action);
     powerKeyBattery->addItem(action);
   }
-  mainLayout->addWidget(powerKeyPlugged, 4, 1);
-  mainLayout->addWidget(powerKeyBattery, 4, 2);
+  mainLayout->addWidget(powerKeyPlugged, 5, 1);
+  mainLayout->addWidget(powerKeyBattery, 5, 2);
 
   // Power Profiles
-  mainLayout->addWidget(new QLabel("Power Profile:"), 5, 0);
-  mainLayout->addWidget(powerProfilePlugged, 5, 1);
-  mainLayout->addWidget(powerProfileBattery, 5, 2);
+  mainLayout->addWidget(new QLabel("Power Profile:"), 6, 0);
+  mainLayout->addWidget(powerProfilePlugged, 6, 1);
+  mainLayout->addWidget(powerProfileBattery, 6, 2);
 
   // Buttons
   QPushButton *saveBtn = new QPushButton("Save changes");
@@ -195,7 +208,7 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
   btnLayout->addStretch();
   btnLayout->addWidget(saveBtn);
   btnLayout->addWidget(cancelBtn);
-  mainLayout->addLayout(btnLayout, 6, 0, 1, 3);
+  mainLayout->addLayout(btnLayout, 7, 0, 1, 3);
 
   // Connections
   connect(cancelBtn, &QPushButton::clicked, mainWindow, &QMainWindow::hide);
@@ -242,8 +255,6 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
 
   auto profiles = profileManager.getPowerProfiles();
   auto activeProfile = profileManager.getActivePowerProfile();
-  qDebug() << "activeProfile: " << activeProfile;
-  qDebug() << "profiles: " << profiles;
 
   emit powerProfilesChanged(profiles, activeProfile);
 
@@ -274,8 +285,6 @@ QString Application::getSettingsPath() {
 void Application::updatePowerProfiles(
     const QHash<QString, QString> &profiles,
     const QPair<QString, QString> &activeProfile) {
-  qDebug() << "updatePowerProfiles";
-  // Clear existing items
   powerProfilePlugged->clear();
   powerProfileBattery->clear();
 
@@ -298,7 +307,8 @@ void Application::updatePowerProfiles(
 void Application::handleCancel() { mainWindow->hide(); }
 void Application::handleSave() {
   QSettings settings(getSettingsPath(), QSettings::IniFormat);
-
+  settings.setValue("LockScreenPlugged", lockScreenPlugged->currentText());
+  settings.setValue("LockScreenBattery", lockScreenBattery->currentText());
   settings.setValue("DisplayPlugged", displayPlugged->currentText());
   settings.setValue("DisplayBattery", displayBattery->currentText());
   settings.setValue("SleepPlugged", sleepPlugged->currentText());
@@ -323,16 +333,26 @@ void Application::handleSave() {
 
 void Application::loadSettings() {
   QSettings settings(getSettingsPath(), QSettings::IniFormat);
-
-  // Restore non-power-profile settings
-  loadComboSetting(displayPlugged, "DisplayPlugged");
-  loadComboSetting(displayBattery, "DisplayBattery");
-  loadComboSetting(sleepPlugged, "SleepPlugged");
-  loadComboSetting(sleepBattery, "SleepBattery");
-  loadComboSetting(lidClosePlugged, "LidClosePlugged");
-  loadComboSetting(lidCloseBattery, "LidCloseBattery");
-  loadComboSetting(powerKeyPlugged, "PowerKeyPlugged");
-  loadComboSetting(powerKeyBattery, "PowerKeyBattery");
+  lockScreenPlugged->setCurrentIndex(lockScreenPlugged->findText(
+      settings.value("LockScreenPlugged").toString()));
+  lockScreenBattery->setCurrentIndex(lockScreenBattery->findText(
+      settings.value("LockScreenBattery").toString()));
+  displayPlugged->setCurrentIndex(
+      displayPlugged->findText(settings.value("DisplayPlugged").toString()));
+  displayBattery->setCurrentIndex(
+      displayBattery->findText(settings.value("DisplayBattery").toString()));
+  sleepPlugged->setCurrentIndex(
+      sleepPlugged->findText(settings.value("SleepPlugged").toString()));
+  sleepBattery->setCurrentIndex(
+      sleepBattery->findText(settings.value("SleepBattery").toString()));
+  lidClosePlugged->setCurrentIndex(
+      lidClosePlugged->findText(settings.value("LidClosePlugged").toString()));
+  lidCloseBattery->setCurrentIndex(
+      lidCloseBattery->findText(settings.value("LidCloseBattery").toString()));
+  powerKeyPlugged->setCurrentIndex(
+      powerKeyPlugged->findText(settings.value("PowerKeyPlugged").toString()));
+  powerKeyBattery->setCurrentIndex(
+      powerKeyBattery->findText(settings.value("PowerKeyBattery").toString()));
   auto savedPlugged = profileManager.getDisplayNameForProfile(
       settings.value("PowerProfilePlugged").toString());
   auto savedBattery = profileManager.getDisplayNameForProfile(
@@ -345,17 +365,6 @@ void Application::loadSettings() {
 
 void Application::onAppLoaded() {
   QTimer::singleShot(0, worker, &Worker::applyPowerSettings);
-}
-
-// Helper function to load a QComboBox setting
-void Application::loadComboSetting(QComboBox *combo, const QString &key) {
-  QSettings settings;
-  QString value = settings.value(key).toString();
-  if (!value.isEmpty()) {
-    int index = combo->findText(value);
-    if (index != -1)
-      combo->setCurrentIndex(index);
-  }
 }
 
 int main(int argc, char *argv[]) {
