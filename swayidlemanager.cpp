@@ -124,8 +124,16 @@ void SwayIdleManager::applyConfig(int16_t lockTimeout, int16_t screenTimeout) {
   }
   file.close();
 
-  QProcess::execute("pkill swayidle");
-  QProcess::startDetached("swayidle -w -d");
+  QProcess *killallProcess = new QProcess(this);
+  killallProcess->start("killall", QStringList() << "swayidle");
+  killallProcess->waitForFinished();
+  delete killallProcess;
+
+  QProcess *swayidleProcess = new QProcess(this);
+  bool executed = swayidleProcess->startDetached("swayidle", QStringList() << "-w" << "-d");
+  if (!executed) {
+    qWarning() << "Could not start swayidle";
+  }
 }
 
 int SwayIdleManager::extractTimeout(const QString &line) {
