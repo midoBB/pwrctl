@@ -10,6 +10,13 @@ static const OrderedMap<QString, int16_t> timeouts = {
     {"Never", -1},
 };
 
+static const OrderedMap<QString, QString> logindActions = {
+    {"Sleep", "suspend"},
+    {"PowerOff", "poweroff"},
+    {"Reboot", "reboot"},
+    {"Do nothing", "ignore"},
+};
+
 Worker::Worker(QObject *parent) : QObject(parent) {
   timer = new QTimer(this);
   connect(timer, &QTimer::timeout, this, &Worker::doWork);
@@ -35,21 +42,24 @@ void Worker::applyPowerSettings() {
   QString lockScreenKey = onBattery ? "LockScreenBattery" : "LockScreenPlugged";
   QString displayKey = onBattery ? "DisplayBattery" : "DisplayPlugged";
   QString sleepKey = onBattery ? "SleepBattery" : "SleepPlugged";
-  QString lidCloseKey = onBattery ? "LidCloseBattery" : "LidClosePlugged";
+  auto lidActionBattery =
+      logindActions.value(settings.value("LidCloseBattery").toString());
+  auto lidActionPlugged =
+      logindActions.value(settings.value("LidClosePlugged").toString());
   QString powerKeyKey = onBattery ? "PowerKeyBattery" : "PowerKeyPlugged";
+  auto powerKeyAction =
+      logindActions.value(settings.value(powerKeyKey).toString());
   QString powerProfileKey =
       onBattery ? "PowerProfileBattery" : "PowerProfilePlugged";
   int16_t lockTimeout =
       timeouts.value(settings.value(lockScreenKey).toString());
   int16_t screenTimeout = timeouts.value(settings.value(displayKey).toString());
-  qDebug() << sleepKey << ": " << settings.value(sleepKey).toString();
-  qDebug() << lidCloseKey << ": " << settings.value(lidCloseKey).toString();
-  qDebug() << powerKeyKey << ": " << settings.value(powerKeyKey).toString();
+  int16_t suspendTimeout = timeouts.value(settings.value(sleepKey).toString());
 
   QString powerProfile = settings.value(powerProfileKey).toString();
-  PowerProfileManager profileManager;
   profileManager.applyPowerProfile(powerProfile);
-  swayIdleManager.applyConfig(lockTimeout, screenTimeout);
+  swayIdleManager.applyConfig(lockTimeout, screenTimeout, suspendTimeout);
+  logindManager.applyConfig(lidActionBattery, lidActionPlugged, powerKeyAction);
 }
 
 void Worker::doWork() {
@@ -176,8 +186,7 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
 
   // Lid close action
   mainLayout->addWidget(new QLabel("When I close the lid:"), 4, 0);
-  QStringList lidCloseActions = {"Do Nothing", "Sleep", "Poweroff"};
-  for (const auto &min : lidCloseActions) {
+  for (const auto &min : logindActions.keys()) {
     lidClosePlugged->addItem(min);
     lidCloseBattery->addItem(min);
   }
@@ -186,10 +195,7 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
 
   // Power Key Action
   mainLayout->addWidget(new QLabel("Power Key Action:"), 5, 0);
-  QStringList powerKeyActions = {"Ignore",  "Poweroff",  "Reboot",
-                                 "Suspend", "Hibernate", "Hybrid Sleep",
-                                 "Lock"};
-  for (const auto &action : powerKeyActions) {
+  for (const auto &action : logindActions.keys()) {
     powerKeyPlugged->addItem(action);
     powerKeyBattery->addItem(action);
   }

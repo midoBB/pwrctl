@@ -17,12 +17,13 @@ public:
   SwayIdleManager(QObject *parent = nullptr);
 
   void parseConfig();
-  void applyConfig(int16_t lockTimeout, int16_t screenTimeout);
+  void applyConfig(int16_t lockTimeout, int16_t screenTimeout, int16_t suspendTimeout);
   QString getConfigPath();
 
 private:
   int screenLockTimeoutSeconds = 0;
   int displayPowerOffTimeoutSeconds = 0;
+  int suspendTimeoutSeconds = 0;
   QString configPath;
 
   int extractTimeout(const QString &line);

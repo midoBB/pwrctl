@@ -20,6 +20,8 @@ void SwayIdleManager::parseConfig() {
         screenLockTimeoutSeconds = extractTimeout(line);
       } else if (line.contains("output * power off")) {
         displayPowerOffTimeoutSeconds = extractTimeout(line);
+      } else if (line.contains("systemctl suspend")) {
+        suspendTimeoutSeconds = extractTimeout(line);
       }
     }
   }
@@ -28,10 +30,16 @@ void SwayIdleManager::parseConfig() {
 
   qDebug() << "Screen lock timeout:" << screenLockTimeoutSeconds;
   qDebug() << "Display power off timeout:" << displayPowerOffTimeoutSeconds;
+  qDebug() << "Suspend timeout:" << suspendTimeoutSeconds;
 }
 
-void SwayIdleManager::applyConfig(int16_t lockTimeout, int16_t screenTimeout) {
+void SwayIdleManager::applyConfig(int16_t lockTimeout, int16_t screenTimeout, int16_t suspendTimeout) {
   QFile file(configPath);
+
+  if (lockTimeout == screenTimeout && lockTimeout != -1) {
+    screenTimeout = lockTimeout + 1;
+  }
+
   if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
     qWarning() << "Could not open Swayidle config file for reading:"
                << configPath;
@@ -57,6 +65,7 @@ void SwayIdleManager::applyConfig(int16_t lockTimeout, int16_t screenTimeout) {
   // These booleans track which line we’ve seen (in order).
   bool foundLock = false;
   bool foundScreen = false;
+  bool foundSuspend = false;
   bool foundDiff = false;
 
   for (int i = 0; i < lines.size(); ++i) {
@@ -108,7 +117,17 @@ void SwayIdleManager::applyConfig(int16_t lockTimeout, int16_t screenTimeout) {
         } else {
           line = indent + keyword + QString::number(screenTimeout) + rest;
         }
-      }
+      } else if (rest.contains("systemctl suspend") && !foundSuspend) {
+       // This is the suspend timeout line
+        foundSuspend = true;
+        if (suspendTimeout == -1) {
+            if (!line.trimmed().startsWith("#")) {
+                line = indent + "# " + keyword + numberStr + rest;
+            }
+        } else {
+            line = indent + keyword + QString::number(suspendTimeout) + rest;
+        }
+    }
     }
     lines[i] = line;
   }

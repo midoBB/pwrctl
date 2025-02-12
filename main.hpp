@@ -1,4 +1,5 @@
 #pragma once
+#include "logindmanager.hpp"
 #include "powerprofile.hpp"
 #include "swayidlemanager.hpp"
 #include <QAction>
@@ -46,6 +47,8 @@ signals:
 private:
   bool readPowerSupplyStatus();
   SwayIdleManager swayIdleManager;
+  PowerProfileManager profileManager;
+  LogindManager logindManager;
   bool onBattery = false;
 };
 
