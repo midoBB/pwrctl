@@ -24,7 +24,7 @@ build: configure
 # Install to system
 install: build
 	mkdir -p $(DESTDIR)/bin
-	cmake --install $(BUILD_DIR) --prefix $(DESTDIR)
+	install -m755 $(BUILD_DIR)/$(EXEC_NAME) $(DESTDIR)/bin/
 
 uninstall:
 	rm -rf $(DESTDIR)/bin/$(EXEC_NAME)
