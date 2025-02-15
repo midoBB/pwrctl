@@ -1,12 +1,18 @@
 #pragma once
+#include "batterymanager.hpp"
 #include "logindmanager.hpp"
 #include "powerprofile.hpp"
 #include "swayidlemanager.hpp"
 #include <QAction>
 #include <QApplication>
 #include <QComboBox>
+#include <QDBusConnection>
+#include <QDBusInterface>
+#include <QDBusReply>
 #include <QDateTime>
+#include <QDir>
 #include <QFile>
+#include <QGraphicsDropShadowEffect>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QIcon>
@@ -16,24 +22,24 @@
 #include <QProcess>
 #include <QPushButton>
 #include <QRegularExpression>
+#include <QSettings>
+#include <QStandardPaths>
 #include <QSystemTrayIcon>
 #include <QTextStream>
 #include <QThread>
 #include <QTimer>
 #include <qglobal.h>
 #include <qnamespace.h>
-#include <QGraphicsDropShadowEffect>
-#include <QSettings>
-#include <QStandardPaths>
-#include <QDir>
-#include <QProcess>
 
 class Worker : public QObject {
   Q_OBJECT
 public:
-  Worker(QObject *parent = nullptr);
+  Worker(QObject *parent = nullptr, QString native_path = "", bool has_battery = false);
   ~Worker() override;
   QTimer *timer;
+  BatteryManager *batteryManager;
+  QString native_path;
+  bool has_battery;
 
 public slots:
   void doWork();
@@ -68,6 +74,7 @@ public slots:
   void updatePowerProfiles(const QHash<QString, QString> &profiles,
                            const QPair<QString, QString> &activeProfile);
   void onAppLoaded();
+  void initFromDbus();
 
 private slots:
   void handleSave();
@@ -77,24 +84,28 @@ private:
   void startWorker();
   void loadSettings();
   QString getSettingsPath();
-  short loadingStep = 0;
-  bool m_onBattery = false;
-  QMainWindow *mainWindow;
-  QSystemTrayIcon *trayIcon;
-  QComboBox *lockScreenPlugged;
-  QComboBox *lockScreenBattery;
-  QComboBox *displayPlugged;
-  QComboBox *displayBattery;
-  QComboBox *sleepPlugged;
-  QComboBox *sleepBattery;
-  QComboBox *lidClosePlugged;
-  QComboBox *lidCloseBattery;
-  QComboBox *powerProfilePlugged;
-  QComboBox *powerProfileBattery;
-  QComboBox *powerKeyPlugged;
-  QComboBox *powerKeyBattery;
-  QThread *workerThread;
-  Worker *worker;
-  QStringList powerProfiles;
-  PowerProfileManager  profileManager;
+  short               loadingStep = 0;
+  bool                m_onBattery = false;
+  bool                has_battery = false;
+  QString             power_native_path;
+  QMainWindow         *mainWindow;
+  QSystemTrayIcon     *trayIcon;
+  QComboBox           *lockScreenPlugged;
+  QComboBox           *lockScreenBattery;
+  QComboBox           *displayPlugged;
+  QComboBox           *displayBattery;
+  QComboBox           *sleepPlugged;
+  QComboBox           *sleepBattery;
+  QComboBox           *lidClosePlugged;
+  QComboBox           *lidCloseBattery;
+  QComboBox           *powerProfilePlugged;
+  QComboBox           *powerProfileBattery;
+  QComboBox           *powerKeyPlugged;
+  QComboBox           *powerKeyBattery;
+  QThread             *workerThread;
+  QLabel              *pluggedText;
+  QLabel              *batteryText;
+  Worker              *worker;
+  QStringList         powerProfiles;
+  PowerProfileManager profileManager;
 };

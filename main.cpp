@@ -2,7 +2,6 @@
 #include "QOrderedMap.h"
 #include "batterymanager.hpp"
 #include "powerprofile.hpp"
-#include <cstdint>
 
 static const OrderedMap<QString, int16_t> timeouts = {
     {"2 minutes", 120},  {"5 minutes", 300},   {"10 minutes", 600},
@@ -17,12 +16,13 @@ static const OrderedMap<QString, QString> logindActions = {
     {"Do nothing", "ignore"},
 };
 
-Worker::Worker(QObject *parent) : QObject(parent) {
+Worker::Worker(QObject *parent, QString native_path, bool has_battery)
+    : QObject(parent), native_path(native_path), has_battery(has_battery) {
   timer = new QTimer(this);
   connect(timer, &QTimer::timeout, this, &Worker::doWork);
   timer->setInterval(5000);
-  BatteryManager batteryManager;
-  onBattery = !batteryManager.readPowerSupplyStatus();
+  this->batteryManager = new BatteryManager(native_path);
+  onBattery = !batteryManager->readPowerSupplyStatus();
 }
 
 void Worker::initialize() {
@@ -31,10 +31,12 @@ void Worker::initialize() {
   emit workerFinished();
 }
 
-Worker::~Worker() { timer->stop(); }
+Worker::~Worker() {
+  timer->stop();
+  delete batteryManager;
+}
 
 void Worker::applyPowerSettings() {
-  qDebug() << "applyPowerSettings called, onBattery:" << onBattery;
   QString settingsPath =
       QStandardPaths::writableLocation(QStandardPaths::ConfigLocation) + "/" +
       QCoreApplication::applicationName() + "/settings.ini";
@@ -63,8 +65,7 @@ void Worker::applyPowerSettings() {
 }
 
 void Worker::doWork() {
-  BatteryManager batteryManager;
-  bool isOnline = batteryManager.readPowerSupplyStatus();
+  bool isOnline = batteryManager->readPowerSupplyStatus();
   bool newOnBattery = !isOnline;
 
   if (newOnBattery != onBattery) {
@@ -73,11 +74,52 @@ void Worker::doWork() {
   }
 }
 
+void Application::initFromDbus() {
+  QDBusConnection systemBus = QDBusConnection::systemBus();
+  QDBusInterface upower_iface("org.freedesktop.UPower",
+                              "/org/freedesktop/UPower",
+                              "org.freedesktop.UPower", systemBus);
+  QDBusReply<QList<QDBusObjectPath>> reply =
+      upower_iface.call("EnumerateDevices");
+  if (reply.isValid()) {
+    QList<QDBusObjectPath> devicePaths = reply.value();
+    for (const QDBusObjectPath &devicePath : devicePaths) {
+      try {
+        QDBusInterface device_iface("org.freedesktop.UPower", devicePath.path(),
+                                    "org.freedesktop.DBus.Properties",
+                                    systemBus);
+
+        // Retrieve all properties from the UPower.Device interface.
+        QDBusReply<QVariantMap> propsReply =
+            device_iface.call("GetAll", "org.freedesktop.UPower.Device");
+
+        if (propsReply.isValid()) {
+          QVariantMap properties = propsReply.value();
+          if (properties.contains("Type")) {
+            if (properties["Type"].toUInt() == 1) {
+              if (power_native_path.isEmpty()) {
+                power_native_path = properties["NativePath"].toString();
+              }
+            }
+            if (properties["Type"].toUInt() == 2) {
+              has_battery = true;
+            }
+          }
+        }
+      } catch (const std::exception &e) {
+        qWarning() << "  Error: " << e.what();
+      }
+    }
+  }
+}
+
 Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
   setQuitOnLastWindowClosed(false);
   connect(this, &Application::appLoaded, this, &Application::onAppLoaded);
+  initFromDbus();
+
   workerThread = new QThread(this);
-  worker = new Worker();
+  worker = new Worker(nullptr, power_native_path, has_battery);
   worker->moveToThread(workerThread);
   connect(workerThread, &QThread::started, worker, &Worker::initialize);
   connect(worker, &Worker::onBatteryChanged, this,
@@ -135,7 +177,7 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
   pluggedIcon->setPixmap(
       QPixmap(":/cable.png")
           .scaled(20, 20, Qt::KeepAspectRatio, Qt::SmoothTransformation));
-  QLabel *pluggedText = new QLabel("Plugged in");
+  pluggedText = new QLabel("Plugged in");
   QHBoxLayout *pluggedHeader = new QHBoxLayout();
   pluggedHeader->setAlignment(Qt::AlignCenter);
   pluggedHeader->addWidget(pluggedText);
@@ -148,7 +190,7 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
   batteryIcon->setPixmap(
       QPixmap(":/battery.png")
           .scaled(20, 20, Qt::KeepAspectRatio, Qt::SmoothTransformation));
-  QLabel *batteryText = new QLabel("On battery");
+  batteryText = new QLabel("On battery");
   QHBoxLayout *batteryHeader = new QHBoxLayout();
   batteryHeader->setAlignment(Qt::AlignCenter);
   batteryHeader->addWidget(batteryText);
@@ -248,11 +290,8 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
   connect(this, &Application::powerSourceChanged, [this](bool onBattery) {
     QFont font;
     font.setBold(true);
-
-    displayPlugged->setFont(onBattery ? QFont() : font);
-    displayBattery->setFont(onBattery ? font : QFont());
-
-    // Or show current state in window title
+    pluggedText->setFont(onBattery ? QFont() : font);
+    batteryText->setFont(onBattery ? font : QFont());
     mainWindow->setWindowTitle(
         QString("Power Settings - %1").arg(onBattery ? "Battery" : "AC Power"));
   });
@@ -371,6 +410,15 @@ void Application::loadSettings() {
 
 void Application::onAppLoaded() {
   QTimer::singleShot(0, worker, &Worker::applyPowerSettings);
+  QFont font;
+  font.setBold(true);
+  BatteryManager *batteryManager = new BatteryManager(power_native_path);
+  bool onBattery = batteryManager->readPowerSupplyStatus();
+  delete batteryManager;
+  pluggedText->setFont(onBattery ? QFont() : font);
+  batteryText->setFont(onBattery ? font : QFont());
+  mainWindow->setWindowTitle(
+      QString("Power Settings - %1").arg(onBattery ? "Battery" : "AC Power"));
 }
 
 int main(int argc, char *argv[]) {

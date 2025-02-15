@@ -2,9 +2,27 @@
 
 ## Description
 
+Pwrctl is a simple GUI application to control the power management of your system.
+It allows you to configure:
+
+- Power profiles (using `powerprofilesctl`)
+- Screen lock timeout
+- Display turn off timeout
+- Sleep timeout
+- Lid close action
+- Power key action
+
 This is a simple GUI application to control the power management of the system.
 
 ## Requirements
+
+```terminal
+sudo apt install -y \
+    powerprofilesctl \
+    swayidle
+```
+
+### Qt Dependencies (Debian/Ubuntu)
 
 ```terminal
 sudo apt install -y \
@@ -14,6 +32,8 @@ sudo apt install -y \
     libx11-6 \
     libgl1
 ```
+
+These dependencies are needed to run the compiled application.
 
 ## Building
 
@@ -39,3 +59,11 @@ sudo apt install -y \
     libxkbcommon-dev \
     libwayland-dev
 ```
+
+These dependencies are needed to compile the application from source code.
+
+## Usage
+
+After building the application, you can run it by executing the `pwrctl` binary.
+The application will start in the system tray. Click on the tray icon to open the settings window.
+From there, you can configure the power management settings and save them.
