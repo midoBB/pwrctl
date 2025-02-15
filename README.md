@@ -1,5 +1,8 @@
 # Pwrctl
 
+> [!WARNING]
+> This software is written for personal use. Keep your expectations low.
+
 ## Description
 
 Pwrctl is a simple GUI application to control the power management of your system.
@@ -16,11 +19,14 @@ This is a simple GUI application to control the power management of the system.
 
 ## Requirements
 
-```terminal
-sudo apt install -y \
-    powerprofilesctl \
-    swayidle
-```
+This application requires the following applications to be running:
+
+- `powerprofilesctl`
+- `upower`
+- `swayidle`
+- `systemd-logind`
+
+This application is intended to be used on Sway Wayland compositor or similar compositors.
 
 ### Qt Dependencies (Debian/Ubuntu)
 
