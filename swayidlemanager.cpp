@@ -4,7 +4,6 @@
 SwayIdleManager::SwayIdleManager(QObject *parent) : QObject(parent) {}
 
 void SwayIdleManager::handleSigTerm(int signal) {
-  qDebug() << "SwayIdleManager received signal: " << signal;
   bool executed =
       QProcess::startDetached("swayidle", QStringList() << "-w" << "-d");
   if (!executed) {

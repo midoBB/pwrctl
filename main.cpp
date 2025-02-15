@@ -3,6 +3,7 @@
 #include "batterymanager.hpp"
 #include "powerprofile.hpp"
 #include <csignal>
+#include <qglobal.h>
 #include <qnamespace.h>
 static QCoreApplication *g_app = nullptr;
 void termSignalHandler(int signal) {
@@ -129,18 +130,9 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
   sigemptyset(&sa.sa_mask);
   sa.sa_flags = 0;
 
-  if (sigaction(SIGTERM, &sa, nullptr) == -1) {
-    qDebug() << "Failed to set up SIGTERM handler";
-    return;
-  }
-  if (sigaction(SIGQUIT, &sa, nullptr) == -1) {
-    qDebug() << "Failed to set up SIGQUIT handler";
-    return;
-  }
-  if (sigaction(SIGINT, &sa, nullptr) == -1) {
-    qDebug() << "Failed to set up SIGINT handler";
-    return;
-  }
+  sigaction(SIGTERM, &sa, nullptr);
+  sigaction(SIGQUIT, &sa, nullptr);
+  sigaction(SIGINT, &sa, nullptr);
   setQuitOnLastWindowClosed(false);
   connect(this, &Application::appLoaded, this, &Application::onAppLoaded);
   initFromDbus();

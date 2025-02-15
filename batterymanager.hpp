@@ -4,6 +4,7 @@
 #include <QIODevice>
 #include <QString>
 #include <QTextStream>
+#include <QtGlobal>
 #include <QDebug>
 
 class BatteryManager : public QObject {

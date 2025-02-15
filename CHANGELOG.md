@@ -1,26 +1,30 @@
+<a name="unreleased"></a>
+## [Unreleased]
+
+### Chore
+- Prepare for public release
+- **readme:** Update README with screenshot
+
+### Refactor
+- **misc:** Remove unnecessary debug calls
+
+
 <a name="v1.0.1"></a>
-
 ## [v1.0.1] - 2025-02-15
-
 ### Fix
-
 - **Make:** Correct installation command in Makefile
 
 ### Refactor
-
 - **misc:** Implement power settings and UI improvements
 - **power:** Remove hardcoded power paths, prepare removals
 
+
 <a name="v1.0.0"></a>
-
 ## [v1.0.0] - 2025-02-12
-
 ### Chore
-
 - **build:** Add uninstall targets in Makefile
 
 ### Feat
-
 - **gui:** Implement lock screen timeout setting
 - **gui:** Implement QOrderedMap and populate dropdowns
 - **gui:** Enhance power settings window appearance
@@ -34,15 +38,12 @@
 - **swayidle:** Implement swayidle config parsing and integration
 
 ### Fix
-
 - **build:** Correctly set C++ compiler and remove DBus dependency
 
 ### Fix
-
 - **swayidlemanager:** Properly start and manage swayidle process
 
 ### Refactor
-
 - **app:** Improve application loading and settings
 - **power-management:** Improve power profile application
 - **power_monitoring:** Replace D-Bus with file-based power source detection
@@ -50,19 +51,16 @@
 - **powerprofile:** Refactor power profile handling
 
 ### Refactor
-
 - **power:** Decouple power supply status check
 
+
 <a name="v0.0.2"></a>
-
 ## [v0.0.2] - 2025-01-22
-
 ### Chore
-
 - **release:** Update release workflow for x86-64 binary
 
-<a name="v0.0.1"></a>
 
+<a name="v0.0.1"></a>
 ## v0.0.1 - 2025-01-22
 
 [Unreleased]: https://github.com/midoBB/pwrctl/compare/v1.0.1...HEAD
