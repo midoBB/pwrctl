@@ -17,6 +17,8 @@ It allows you to configure:
 
 This is a simple GUI application to control the power management of the system.
 
+[![Screenshot](assets/screenshot.png)](assets/screenshot.png)
+
 ## Requirements
 
 This application requires the following applications to be running:
