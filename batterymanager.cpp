@@ -1,9 +1,7 @@
 #include "batterymanager.hpp"
 
-BatteryManager::BatteryManager(QString native_path)
-    {
+BatteryManager::BatteryManager(QString native_path) : QObject(nullptr) {
     this->native_path = native_path;
-    qDebug() << "BatteryManager::BatteryManager called with native_path:" << native_path;
 }
 
 QString BatteryManager::getPowerSupplyPath() {

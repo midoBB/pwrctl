@@ -3,6 +3,15 @@
 
 SwayIdleManager::SwayIdleManager(QObject *parent) : QObject(parent) {}
 
+void SwayIdleManager::handleSigTerm(int signal) {
+  qDebug() << "SwayIdleManager received signal: " << signal;
+  bool executed =
+      QProcess::startDetached("swayidle", QStringList() << "-w" << "-d");
+  if (!executed) {
+    qWarning() << "Could not start swayidle";
+  }
+}
+
 void SwayIdleManager::parseConfig() {
   this->configPath = getConfigPath();
   QFile configFile(configPath);
@@ -27,13 +36,10 @@ void SwayIdleManager::parseConfig() {
   }
 
   configFile.close();
-
-  qDebug() << "Screen lock timeout:" << screenLockTimeoutSeconds;
-  qDebug() << "Display power off timeout:" << displayPowerOffTimeoutSeconds;
-  qDebug() << "Suspend timeout:" << suspendTimeoutSeconds;
 }
 
-void SwayIdleManager::applyConfig(int16_t lockTimeout, int16_t screenTimeout, int16_t suspendTimeout) {
+void SwayIdleManager::applyConfig(int16_t lockTimeout, int16_t screenTimeout,
+                                  int16_t suspendTimeout) {
   QFile file(configPath);
 
   if (lockTimeout == screenTimeout && lockTimeout != -1) {
@@ -118,16 +124,16 @@ void SwayIdleManager::applyConfig(int16_t lockTimeout, int16_t screenTimeout, in
           line = indent + keyword + QString::number(screenTimeout) + rest;
         }
       } else if (rest.contains("systemctl suspend") && !foundSuspend) {
-       // This is the suspend timeout line
+        // This is the suspend timeout line
         foundSuspend = true;
         if (suspendTimeout == -1) {
-            if (!line.trimmed().startsWith("#")) {
-                line = indent + "# " + keyword + numberStr + rest;
-            }
+          if (!line.trimmed().startsWith("#")) {
+            line = indent + "# " + keyword + numberStr + rest;
+          }
         } else {
-            line = indent + keyword + QString::number(suspendTimeout) + rest;
+          line = indent + keyword + QString::number(suspendTimeout) + rest;
         }
-    }
+      }
     }
     lines[i] = line;
   }
@@ -149,8 +155,11 @@ void SwayIdleManager::applyConfig(int16_t lockTimeout, int16_t screenTimeout, in
   delete killallProcess;
 
   QProcess *swayidleProcess = new QProcess(this);
-  bool executed = swayidleProcess->startDetached("swayidle", QStringList() << "-w" << "-d");
-  if (!executed) {
+  swayidleProcess->setStandardOutputFile("/dev/null");
+  swayidleProcess->setStandardErrorFile("/dev/null");
+  swayidleProcess->start("swayidle", QStringList() << "-w"
+                                                   << "-d");
+  if (!swayidleProcess->waitForStarted()) {
     qWarning() << "Could not start swayidle";
   }
 }

@@ -68,5 +68,4 @@ void PowerProfileManager::applyPowerProfile(const QString &profile) {
     process->setArguments(QStringList() << "set" << profile);
     process->start();
     process->waitForFinished();
-    qDebug() << "Setting power profile to: " << profile;
 }

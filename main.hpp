@@ -34,7 +34,8 @@
 class Worker : public QObject {
   Q_OBJECT
 public:
-  Worker(QObject *parent = nullptr, QString native_path = "", bool has_battery = false);
+  Worker(QObject *parent = nullptr, QString native_path = "",
+         bool has_battery = false);
   ~Worker() override;
   QTimer *timer;
   BatteryManager *batteryManager;
@@ -45,6 +46,7 @@ public slots:
   void doWork();
   void initialize();
   void applyPowerSettings();
+  void cleanup();
 
 signals:
   void onBatteryChanged(bool onBattery);
@@ -52,7 +54,7 @@ signals:
 
 private:
   bool readPowerSupplyStatus();
-  SwayIdleManager swayIdleManager;
+  SwayIdleManager *swayIdleManager;
   PowerProfileManager profileManager;
   LogindManager logindManager;
   bool onBattery = false;
@@ -84,28 +86,29 @@ private:
   void startWorker();
   void loadSettings();
   QString getSettingsPath();
-  short               loadingStep = 0;
-  bool                m_onBattery = false;
-  bool                has_battery = false;
-  QString             power_native_path;
-  QMainWindow         *mainWindow;
-  QSystemTrayIcon     *trayIcon;
-  QComboBox           *lockScreenPlugged;
-  QComboBox           *lockScreenBattery;
-  QComboBox           *displayPlugged;
-  QComboBox           *displayBattery;
-  QComboBox           *sleepPlugged;
-  QComboBox           *sleepBattery;
-  QComboBox           *lidClosePlugged;
-  QComboBox           *lidCloseBattery;
-  QComboBox           *powerProfilePlugged;
-  QComboBox           *powerProfileBattery;
-  QComboBox           *powerKeyPlugged;
-  QComboBox           *powerKeyBattery;
-  QThread             *workerThread;
-  QLabel              *pluggedText;
-  QLabel              *batteryText;
-  Worker              *worker;
-  QStringList         powerProfiles;
+  short loadingStep = 0;
+  bool m_onBattery = false;
+  bool has_battery = false;
+  QString power_native_path;
+  QMainWindow *mainWindow;
+  QSystemTrayIcon *trayIcon;
+  QComboBox *lockScreenPlugged;
+  QComboBox *lockScreenBattery;
+  QComboBox *displayPlugged;
+  QComboBox *displayBattery;
+  QComboBox *sleepPlugged;
+  QComboBox *sleepBattery;
+  QComboBox *lidClosePlugged;
+  QComboBox *lidCloseBattery;
+  QComboBox *powerProfilePlugged;
+  QComboBox *powerProfileBattery;
+  QComboBox *powerKeyPlugged;
+  QComboBox *powerKeyBattery;
+  QThread *workerThread;
+  QLabel *pluggedText;
+  QLabel *batteryText;
+  QLabel *batteryIcon;
+  Worker *worker;
+  QStringList powerProfiles;
   PowerProfileManager profileManager;
 };

@@ -1,14 +1,14 @@
 #pragma once
 
-#include <QObject>
-#include <QString>
-#include <QDir>
 #include <QDebug>
+#include <QDir>
 #include <QFile>
+#include <QObject>
+#include <QProcess>
 #include <QRegularExpression>
 #include <QRegularExpressionMatch>
+#include <QString>
 #include <QTextStream>
-#include <QProcess>
 #include <cstdint>
 
 class SwayIdleManager : public QObject {
@@ -17,8 +17,12 @@ public:
   SwayIdleManager(QObject *parent = nullptr);
 
   void parseConfig();
-  void applyConfig(int16_t lockTimeout, int16_t screenTimeout, int16_t suspendTimeout);
+  void applyConfig(int16_t lockTimeout, int16_t screenTimeout,
+                   int16_t suspendTimeout);
   QString getConfigPath();
+
+public slots:
+  void handleSigTerm(int signal);
 
 private:
   int screenLockTimeoutSeconds = 0;
@@ -28,4 +32,3 @@ private:
 
   int extractTimeout(const QString &line);
 };
-

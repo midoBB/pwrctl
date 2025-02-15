@@ -2,7 +2,15 @@
 #include "QOrderedMap.h"
 #include "batterymanager.hpp"
 #include "powerprofile.hpp"
-
+#include <csignal>
+#include <qnamespace.h>
+static QCoreApplication *g_app = nullptr;
+void termSignalHandler(int signal) {
+  if ((signal == SIGTERM || signal == SIGQUIT || signal == SIGINT) &&
+      g_app != nullptr) {
+    QMetaObject::invokeMethod(g_app, "quit", Qt::QueuedConnection);
+  }
+}
 static const OrderedMap<QString, int16_t> timeouts = {
     {"2 minutes", 120},  {"5 minutes", 300},   {"10 minutes", 600},
     {"15 minutes", 900}, {"30 minutes", 1800}, {"1 hour", 3600},
@@ -22,12 +30,13 @@ Worker::Worker(QObject *parent, QString native_path, bool has_battery)
   connect(timer, &QTimer::timeout, this, &Worker::doWork);
   timer->setInterval(5000);
   this->batteryManager = new BatteryManager(native_path);
+  this->swayIdleManager = new SwayIdleManager(this);
   onBattery = !batteryManager->readPowerSupplyStatus();
 }
 
 void Worker::initialize() {
   timer->start();
-  swayIdleManager.parseConfig();
+  swayIdleManager->parseConfig();
   emit workerFinished();
 }
 
@@ -60,7 +69,7 @@ void Worker::applyPowerSettings() {
 
   QString powerProfile = settings.value(powerProfileKey).toString();
   profileManager.applyPowerProfile(powerProfile);
-  swayIdleManager.applyConfig(lockTimeout, screenTimeout, suspendTimeout);
+  swayIdleManager->applyConfig(lockTimeout, screenTimeout, suspendTimeout);
   logindManager.applyConfig(lidActionBattery, lidActionPlugged, powerKeyAction);
 }
 
@@ -73,6 +82,8 @@ void Worker::doWork() {
     emit onBatteryChanged(onBattery);
   }
 }
+
+void Worker::cleanup() { swayIdleManager->handleSigTerm(SIGTERM); }
 
 void Application::initFromDbus() {
   QDBusConnection systemBus = QDBusConnection::systemBus();
@@ -88,8 +99,6 @@ void Application::initFromDbus() {
         QDBusInterface device_iface("org.freedesktop.UPower", devicePath.path(),
                                     "org.freedesktop.DBus.Properties",
                                     systemBus);
-
-        // Retrieve all properties from the UPower.Device interface.
         QDBusReply<QVariantMap> propsReply =
             device_iface.call("GetAll", "org.freedesktop.UPower.Device");
 
@@ -114,10 +123,27 @@ void Application::initFromDbus() {
 }
 
 Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
+  g_app = this;
+  struct sigaction sa;
+  sa.sa_handler = termSignalHandler;
+  sigemptyset(&sa.sa_mask);
+  sa.sa_flags = 0;
+
+  if (sigaction(SIGTERM, &sa, nullptr) == -1) {
+    qDebug() << "Failed to set up SIGTERM handler";
+    return;
+  }
+  if (sigaction(SIGQUIT, &sa, nullptr) == -1) {
+    qDebug() << "Failed to set up SIGQUIT handler";
+    return;
+  }
+  if (sigaction(SIGINT, &sa, nullptr) == -1) {
+    qDebug() << "Failed to set up SIGINT handler";
+    return;
+  }
   setQuitOnLastWindowClosed(false);
   connect(this, &Application::appLoaded, this, &Application::onAppLoaded);
   initFromDbus();
-
   workerThread = new QThread(this);
   worker = new Worker(nullptr, power_native_path, has_battery);
   worker->moveToThread(workerThread);
@@ -136,7 +162,10 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
   });
   workerThread->start();
 
-  mainWindow = new QMainWindow();
+  mainWindow = new QMainWindow(nullptr, Qt::FramelessWindowHint |
+                                            Qt::WindowStaysOnTopHint);
+  mainWindow->setStyleSheet(
+      "QMainWindow { background-color: rgba(18, 18, 18, 192); }");
   this->lockScreenPlugged = new QComboBox();
   this->lockScreenBattery = new QComboBox();
   this->displayPlugged = new QComboBox();
@@ -153,15 +182,7 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
   powerProfileBattery->setEnabled(false);
   mainWindow->setWindowTitle("Power Settings");
   QWidget *centralWidget = new QWidget();
-  centralWidget->setStyleSheet("background-color: transparent;");
   centralWidget->setContentsMargins(10, 10, 10, 10);
-
-  QGraphicsDropShadowEffect *shadowEffect =
-      new QGraphicsDropShadowEffect(centralWidget);
-  shadowEffect->setBlurRadius(10);
-  shadowEffect->setColor(QColor(0, 0, 0, 80));
-  shadowEffect->setOffset(0);
-  centralWidget->setGraphicsEffect(shadowEffect);
 
   QGridLayout *mainLayout = new QGridLayout(centralWidget);
   mainLayout->addWidget(new QLabel(), 0, 0); // Empty corner
@@ -172,7 +193,7 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
   headerRow->setContentsMargins(0, 20, 0, 0);
   QHBoxLayout *headerLayout = new QHBoxLayout(headerRow);
 
-  // Empty spacer for first column
+  // Plugged in header
   QLabel *pluggedIcon = new QLabel();
   pluggedIcon->setPixmap(
       QPixmap(":/cable.png")
@@ -185,69 +206,111 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
   pluggedHeader->setSpacing(5);
   headerLayout->addLayout(pluggedHeader);
 
-  // Battery header
-  QLabel *batteryIcon = new QLabel();
-  batteryIcon->setPixmap(
-      QPixmap(":/battery.png")
-          .scaled(20, 20, Qt::KeepAspectRatio, Qt::SmoothTransformation));
-  batteryText = new QLabel("On battery");
-  QHBoxLayout *batteryHeader = new QHBoxLayout();
-  batteryHeader->setAlignment(Qt::AlignCenter);
-  batteryHeader->addWidget(batteryText);
-  batteryHeader->addWidget(batteryIcon);
-  batteryHeader->setSpacing(5);
-  headerLayout->addLayout(batteryHeader);
+  batteryIcon = nullptr;
+  batteryText = nullptr;
+  QHBoxLayout *batteryHeader = nullptr;
+
+  if (has_battery) {
+    // Battery header
+    batteryIcon = new QLabel();
+    batteryIcon->setPixmap(
+        QPixmap(":/battery.png")
+            .scaled(20, 20, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    batteryText = new QLabel("On battery");
+    batteryHeader = new QHBoxLayout();
+    batteryHeader->setAlignment(Qt::AlignCenter);
+    batteryHeader->addWidget(batteryText);
+    batteryHeader->addWidget(batteryIcon);
+    batteryHeader->setSpacing(5);
+    headerLayout->addLayout(batteryHeader);
+  }
 
   // Add header row to main layout
-  mainLayout->addWidget(headerRow, 0, 1, 1, 2); // Span all columns
+  mainLayout->addWidget(headerRow, 0, 1, 1, has_battery ? 2 : 1);
+
   // Lock screen
-  mainLayout->addWidget(new QLabel("Lock screen:"), 1, 0);
+  mainLayout->addWidget(new QLabel("Lock screen:"), 1, 0, 1, 1);
   for (const auto &min : timeouts.keys()) {
     lockScreenPlugged->addItem(min);
-    lockScreenBattery->addItem(min);
+    if (has_battery) {
+      lockScreenBattery->addItem(min);
+    }
   }
-  mainLayout->addWidget(lockScreenPlugged, 1, 1);
-  mainLayout->addWidget(lockScreenBattery, 1, 2);
+  mainLayout->addWidget(lockScreenPlugged, 1, 1, 1, 1);
+  if (has_battery) {
+    mainLayout->addWidget(lockScreenBattery, 1, 2, 1, 1);
+  } else {
+    mainLayout->addWidget(lockScreenPlugged, 1, 1, 1, 2);
+  }
+
   // Turn off display
-  mainLayout->addWidget(new QLabel("Turn off the display:"), 2, 0);
+  mainLayout->addWidget(new QLabel("Turn off the display:"), 2, 0, 1, 1);
   for (const auto &min : timeouts.keys()) {
     displayPlugged->addItem(min);
-    displayBattery->addItem(min);
+    if (has_battery) {
+      displayBattery->addItem(min);
+    }
   }
-  mainLayout->addWidget(displayPlugged, 2, 1);
-  mainLayout->addWidget(displayBattery, 2, 2);
+  mainLayout->addWidget(displayPlugged, 2, 1, 1, 1);
+  if (has_battery) {
+    mainLayout->addWidget(displayBattery, 2, 2, 1, 1);
+  } else {
+    mainLayout->addWidget(displayPlugged, 2, 1, 1, 2);
+  }
 
   // Put to sleep
-  mainLayout->addWidget(new QLabel("Put the computer to sleep:"), 3, 0);
+  mainLayout->addWidget(new QLabel("Put the computer to sleep:"), 3, 0, 1, 1);
   for (const auto &min : timeouts.keys()) {
     sleepPlugged->addItem(min);
-    sleepBattery->addItem(min);
+    if (has_battery) {
+      sleepBattery->addItem(min);
+    }
   }
-  mainLayout->addWidget(sleepPlugged, 3, 1);
-  mainLayout->addWidget(sleepBattery, 3, 2);
+  mainLayout->addWidget(sleepPlugged, 3, 1, 1, 1);
+  if (has_battery) {
+    mainLayout->addWidget(sleepBattery, 3, 2, 1, 1);
+  } else {
+    mainLayout->addWidget(sleepPlugged, 3, 1, 1, 2);
+  }
 
   // Lid close action
-  mainLayout->addWidget(new QLabel("When I close the lid:"), 4, 0);
+  mainLayout->addWidget(new QLabel("When I close the lid:"), 4, 0, 1, 1);
   for (const auto &min : logindActions.keys()) {
     lidClosePlugged->addItem(min);
-    lidCloseBattery->addItem(min);
+    if (has_battery) {
+      lidCloseBattery->addItem(min);
+    }
   }
-  mainLayout->addWidget(lidClosePlugged, 4, 1);
-  mainLayout->addWidget(lidCloseBattery, 4, 2);
+  mainLayout->addWidget(lidClosePlugged, 4, 1, 1, 1);
+  if (has_battery) {
+    mainLayout->addWidget(lidCloseBattery, 4, 2, 1, 1);
+  } else {
+    mainLayout->addWidget(lidClosePlugged, 4, 1, 1, 2);
+  }
 
   // Power Key Action
-  mainLayout->addWidget(new QLabel("Power Key Action:"), 5, 0);
+  mainLayout->addWidget(new QLabel("Power Key Action:"), 5, 0, 1, 1);
   for (const auto &action : logindActions.keys()) {
     powerKeyPlugged->addItem(action);
-    powerKeyBattery->addItem(action);
+    if (has_battery) {
+      powerKeyBattery->addItem(action);
+    }
   }
-  mainLayout->addWidget(powerKeyPlugged, 5, 1);
-  mainLayout->addWidget(powerKeyBattery, 5, 2);
+  mainLayout->addWidget(powerKeyPlugged, 5, 1, 1, 1);
+  if (has_battery) {
+    mainLayout->addWidget(powerKeyBattery, 5, 2, 1, 1);
+  } else {
+    mainLayout->addWidget(powerKeyPlugged, 5, 1, 1, 2);
+  }
 
   // Power Profiles
-  mainLayout->addWidget(new QLabel("Power Profile:"), 6, 0);
-  mainLayout->addWidget(powerProfilePlugged, 6, 1);
-  mainLayout->addWidget(powerProfileBattery, 6, 2);
+  mainLayout->addWidget(new QLabel("Power Profile:"), 6, 0, 1, 1);
+  mainLayout->addWidget(powerProfilePlugged, 6, 1, 1, 1);
+  if (has_battery) {
+    mainLayout->addWidget(powerProfileBattery, 6, 2, 1, 1);
+  } else {
+    mainLayout->addWidget(powerProfilePlugged, 6, 1, 1, 2);
+  }
 
   // Buttons
   QPushButton *saveBtn = new QPushButton("Save changes");
@@ -287,11 +350,14 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
   trayIcon->show();
   connect(saveBtn, &QPushButton::clicked, this, &Application::handleSave);
   connect(cancelBtn, &QPushButton::clicked, this, &Application::handleCancel);
+  connect(this, &QCoreApplication::aboutToQuit, worker, &Worker::cleanup);
   connect(this, &Application::powerSourceChanged, [this](bool onBattery) {
     QFont font;
     font.setBold(true);
     pluggedText->setFont(onBattery ? QFont() : font);
-    batteryText->setFont(onBattery ? font : QFont());
+    if (has_battery) {
+      batteryText->setFont(onBattery ? font : QFont());
+    }
     mainWindow->setWindowTitle(
         QString("Power Settings - %1").arg(onBattery ? "Battery" : "AC Power"));
   });
@@ -313,6 +379,7 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
 Application::~Application() {
   workerThread->quit();
   workerThread->wait();
+  g_app = nullptr;
 }
 
 QString Application::getSettingsPath() {
@@ -410,13 +477,15 @@ void Application::loadSettings() {
 
 void Application::onAppLoaded() {
   QTimer::singleShot(0, worker, &Worker::applyPowerSettings);
+  BatteryManager *batteryManager = new BatteryManager(power_native_path);
+  bool onBattery = !batteryManager->readPowerSupplyStatus();
+  delete batteryManager;
   QFont font;
   font.setBold(true);
-  BatteryManager *batteryManager = new BatteryManager(power_native_path);
-  bool onBattery = batteryManager->readPowerSupplyStatus();
-  delete batteryManager;
   pluggedText->setFont(onBattery ? QFont() : font);
-  batteryText->setFont(onBattery ? font : QFont());
+  if (has_battery) {
+    batteryText->setFont(onBattery ? font : QFont());
+  }
   mainWindow->setWindowTitle(
       QString("Power Settings - %1").arg(onBattery ? "Battery" : "AC Power"));
 }

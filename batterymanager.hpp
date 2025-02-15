@@ -6,7 +6,8 @@
 #include <QTextStream>
 #include <QDebug>
 
-class BatteryManager {
+class BatteryManager : public QObject {
+    Q_OBJECT
 public:
     BatteryManager(QString native_path);
     bool readPowerSupplyStatus();

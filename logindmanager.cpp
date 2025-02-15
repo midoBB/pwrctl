@@ -52,10 +52,7 @@ void LogindManager::applyConfig(QString lidBatteryAction,
 
   if (process->exitCode() != 0) {
     qWarning() << "Failed to apply Logind config:" << process->errorString();
-  } else {
-    qDebug() << "Logind config applied successfully";
   }
-
   // Restart logind service
   QStringList restartArguments;
   restartArguments << "systemctl" << "reload" << "systemd-logind.service";
@@ -67,7 +64,5 @@ void LogindManager::applyConfig(QString lidBatteryAction,
 
   if (restartProcess->exitCode() != 0) {
     qWarning() << "Failed to restart logind:" << restartProcess->errorString();
-  } else {
-    qDebug() << "Logind restarted successfully";
   }
 }
